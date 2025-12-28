@@ -13,6 +13,7 @@
 const { execSync, spawn } = require('child_process');
 const https = require('https');
 const dns = require('dns');
+const fs = require('fs');
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -41,11 +42,34 @@ async function queryLLM(prompt, options = {}) {
 }
 
 /**
+ * Get OAuth token from Claude credentials file
+ */
+function getClaudeOAuthToken() {
+  try {
+    const credsPath = '/root/.claude/.credentials.json';
+    if (fs.existsSync(credsPath)) {
+      const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+      return creds.claudeAiOauth?.accessToken || null;
+    }
+  } catch (e) {
+    console.error('Failed to read Claude credentials:', e.message);
+  }
+  return null;
+}
+
+/**
  * Query using Claude Code CLI
  */
 async function queryClaudeCode(prompt, { timeout, workingDir }) {
   return new Promise((resolve, reject) => {
     try {
+      // Get OAuth token from credentials file
+      const oauthToken = getClaudeOAuthToken();
+      if (!oauthToken) {
+        reject(new Error('No Claude OAuth token found. Run: claude setup-token'));
+        return;
+      }
+
       // Use claude CLI with print mode
       const result = execSync(
         `claude -p "${prompt.replace(/"/g, '\\"')}"`,
@@ -53,7 +77,11 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
           cwd: workingDir,
           timeout,
           encoding: 'utf8',
-          env: { ...process.env, HOME: '/root' }
+          env: {
+            ...process.env,
+            HOME: '/root',
+            CLAUDE_CODE_OAUTH_TOKEN: oauthToken
+          }
         }
       );
       resolve(result.trim());
