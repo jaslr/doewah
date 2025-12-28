@@ -23,10 +23,10 @@ const DOEWAH_DIR = '/root/doewah';
 const PROJECTS_DIR = '/root/projects';
 const LOGS_DIR = '/root/logs';
 
-// Import orchestrator (will be available after first deploy)
+// Import orchestrator (use absolute path since bot runs from /root/claude-bot)
 let orchestrator = null;
 try {
-  orchestrator = require('../orchestrator');
+  orchestrator = require('/root/doewah/orchestrator');
   console.log('Orchestrator loaded, LLM provider:', orchestrator.LLM_PROVIDER);
 } catch (e) {
   console.log('Orchestrator not available yet:', e.message);
