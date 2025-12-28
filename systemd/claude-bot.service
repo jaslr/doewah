@@ -13,7 +13,7 @@ StandardOutput=journal
 StandardError=journal
 
 # Load environment variables
-EnvironmentFile=/root/.env
+EnvironmentFile=/root/doewah/.env
 
 # Give it time to shut down gracefully
 TimeoutStopSec=10

@@ -25,7 +25,7 @@ const LOGS_DIR = '/root/logs';
 
 // Validate required env vars
 if (!BOT_TOKEN || !CHAT_ID) {
-  console.error('ERROR: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in /root/.env');
+  console.error('ERROR: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set in /root/doewah/.env');
   process.exit(1);
 }
 
@@ -139,7 +139,7 @@ function runClaudeTask(project, task, autoDeploy = false) {
   // Create the execution script
   const scriptContent = `#!/bin/bash
 set -a
-source /root/.env
+source /root/doewah/.env
 set +a
 
 cd ${projectPath}
