@@ -1,0 +1,22 @@
+[Unit]
+Description=DOEWAH Claude Code Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/claude-bot
+ExecStart=/usr/bin/node /root/claude-bot/bot.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Load environment variables
+EnvironmentFile=/root/.env
+
+# Give it time to shut down gracefully
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
