@@ -56,6 +56,7 @@ function sendMessage(text, parseMode = 'Markdown') {
       hostname: 'api.telegram.org',
       path: `/bot${BOT_TOKEN}/sendMessage`,
       method: 'POST',
+      family: 4, // Force IPv4
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(data)
@@ -396,7 +397,8 @@ function pollUpdates() {
   const options = {
     hostname: 'api.telegram.org',
     path: `/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=30`,
-    method: 'GET'
+    method: 'GET',
+    family: 4 // Force IPv4
   };
 
   const req = https.request(options, (res) => {
