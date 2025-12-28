@@ -81,9 +81,8 @@ export PATH="$FLYCTL_INSTALL/bin:$PATH"
 echo "  - Installing Firebase CLI..."
 npm install -g firebase-tools
 
-# Supabase
-echo "  - Installing Supabase CLI..."
-npm install -g supabase
+# Supabase (use brew or npx - npm global install not supported)
+echo "  - Supabase CLI: use 'npx supabase' or install via brew"
 
 # Sentry
 echo "  - Installing Sentry CLI..."
