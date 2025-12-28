@@ -2,6 +2,10 @@ const https = require('https');
 const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const dns = require('dns');
+
+// Force IPv4 (some VPS don't have IPv6 connectivity)
+dns.setDefaultResultOrder('ipv4first');
 
 // =============================================================================
 // DOEWAH Telegram Bot
