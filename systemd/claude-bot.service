@@ -6,6 +6,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/claude-bot
+Environment="HOME=/root"
 ExecStart=/bin/bash -c 'source /root/doewah/.env && exec /usr/bin/node /root/claude-bot/bot.js'
 Restart=always
 RestartSec=10
