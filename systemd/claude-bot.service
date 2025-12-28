@@ -6,14 +6,11 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/claude-bot
-ExecStart=/usr/bin/node /root/claude-bot/bot.js
+ExecStart=/bin/bash -c 'source /root/doewah/.env && exec /usr/bin/node /root/claude-bot/bot.js'
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-
-# Load environment variables
-EnvironmentFile=/root/doewah/.env
 
 # Give it time to shut down gracefully
 TimeoutStopSec=10
