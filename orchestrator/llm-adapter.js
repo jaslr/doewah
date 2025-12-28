@@ -1,0 +1,139 @@
+/**
+ * LLM Adapter - Abstracts LLM provider for easy swapping
+ *
+ * Currently supports:
+ * - claude: Claude Code CLI (default, uses OAuth)
+ * - anthropic: Direct Anthropic API (requires API key)
+ *
+ * To add new provider:
+ * 1. Add case to queryLLM()
+ * 2. Implement the provider's API call
+ */
+
+const { execSync, spawn } = require('child_process');
+const https = require('https');
+const dns = require('dns');
+
+dns.setDefaultResultOrder('ipv4first');
+
+// Which LLM provider to use
+const LLM_PROVIDER = process.env.LLM_PROVIDER || 'claude';
+
+/**
+ * Query the LLM with a prompt
+ * @param {string} prompt - The prompt to send
+ * @param {object} options - Options like timeout, workingDir
+ * @returns {Promise<string>} - The LLM response
+ */
+async function queryLLM(prompt, options = {}) {
+  const { timeout = 60000, workingDir = '/root' } = options;
+
+  switch (LLM_PROVIDER) {
+    case 'claude':
+      return queryClaudeCode(prompt, { timeout, workingDir });
+
+    case 'anthropic':
+      return queryAnthropicAPI(prompt, { timeout });
+
+    default:
+      throw new Error(`Unknown LLM provider: ${LLM_PROVIDER}`);
+  }
+}
+
+/**
+ * Query using Claude Code CLI
+ */
+async function queryClaudeCode(prompt, { timeout, workingDir }) {
+  return new Promise((resolve, reject) => {
+    try {
+      // Use claude CLI with print mode
+      const result = execSync(
+        `claude -p "${prompt.replace(/"/g, '\\"')}"`,
+        {
+          cwd: workingDir,
+          timeout,
+          encoding: 'utf8',
+          env: { ...process.env, HOME: '/root' }
+        }
+      );
+      resolve(result.trim());
+    } catch (error) {
+      reject(new Error(`Claude Code error: ${error.message}`));
+    }
+  });
+}
+
+/**
+ * Query using Anthropic API directly (fallback/alternative)
+ */
+async function queryAnthropicAPI(prompt, { timeout }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error('ANTHROPIC_API_KEY not set');
+  }
+
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const options = {
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
+      method: 'POST',
+      family: 4,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(body);
+          if (json.content && json.content[0]) {
+            resolve(json.content[0].text);
+          } else {
+            reject(new Error(`Unexpected API response: ${body}`));
+          }
+        } catch (e) {
+          reject(new Error(`Failed to parse API response: ${e.message}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(timeout, () => {
+      req.destroy();
+      reject(new Error('API request timeout'));
+    });
+
+    req.write(data);
+    req.end();
+  });
+}
+
+/**
+ * Check if LLM is available and working
+ */
+async function healthCheck() {
+  try {
+    const response = await queryLLM('Respond with just "ok"', { timeout: 10000 });
+    return response.toLowerCase().includes('ok');
+  } catch (error) {
+    console.error('LLM health check failed:', error.message);
+    return false;
+  }
+}
+
+module.exports = {
+  queryLLM,
+  healthCheck,
+  LLM_PROVIDER
+};
