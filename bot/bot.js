@@ -299,8 +299,8 @@ async function handleNaturalLanguage(text) {
     return;
   }
 
-  // Quick acknowledgment
-  sendMessage('📨 On it...');
+  // Quick acknowledgment - await to ensure it sends first
+  await sendMessage('📨 On it...');
 
   try {
     const result = await orchestrator.processMessage(text);
