@@ -2,6 +2,30 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Flutter: Run in Chrome",
+      "type": "shell",
+      "command": "cd app && flutter run -d chrome",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Flutter: Run on Linux Desktop",
+      "type": "shell",
+      "command": "cd app && flutter run -d linux",
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true
+    },
+    {
       "label": "Flutter: Build Debug APK",
       "type": "shell",
       "command": "cd app && flutter pub get && flutter build apk --debug",
