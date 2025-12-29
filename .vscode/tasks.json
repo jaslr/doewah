@@ -95,25 +95,25 @@
     {
       "label": "Deploy: Pull & Install on Droplet",
       "type": "shell",
-      "command": "source .env && ssh root@${DROPLET_IP} 'cd /root/doewah && git pull && npm install'",
+      "command": "source .env && ssh -i ~/.ssh/id_jaslr root@${DROPLET_IP} 'cd /root/doewah && git pull && npm install'",
       "problemMatcher": []
     },
     {
       "label": "Deploy: Restart WS Server on Droplet",
       "type": "shell",
-      "command": "source .env && ssh root@${DROPLET_IP} 'pkill -f \"node ws/server.js\" || true && cd /root/doewah && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
+      "command": "source .env && ssh -i ~/.ssh/id_jaslr root@${DROPLET_IP} 'pkill -f \"node ws/server.js\" || true && cd /root/doewah && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
       "problemMatcher": []
     },
     {
       "label": "Deploy: Full (Pull + Restart WS + Updates)",
       "type": "shell",
-      "command": "source .env && ssh root@${DROPLET_IP} 'cd /root/doewah && git pull && npm install && pkill -f \"node ws/server.js\" || true && pkill -f \"node ws/updates.js\" || true && mkdir -p /root/logs && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 & nohup node ws/updates.js > /root/logs/updates-server.log 2>&1 &'",
+      "command": "source .env && ssh -i ~/.ssh/id_jaslr root@${DROPLET_IP} 'cd /root/doewah && git pull && npm install && pkill -f \"node ws/server.js\" || true && pkill -f \"node ws/updates.js\" || true && mkdir -p /root/logs && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 & nohup node ws/updates.js > /root/logs/updates-server.log 2>&1 &'",
       "problemMatcher": []
     },
     {
       "label": "Deploy: View WS Server Logs",
       "type": "shell",
-      "command": "source .env && ssh root@${DROPLET_IP} 'tail -f /root/logs/ws-server.log'",
+      "command": "source .env && ssh -i ~/.ssh/id_jaslr root@${DROPLET_IP} 'tail -f /root/logs/ws-server.log'",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
