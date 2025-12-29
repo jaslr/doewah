@@ -641,35 +641,40 @@ function detectAction(message) {
     }
   }
 
-  // Sentry queries - project-specific: "sentry issues for livna", "livna errors", "livna sentry"
+  // Sentry queries - check if message mentions sentry/century AND a known project
   // Note: "century" is a common voice-to-text mishearing of "sentry"
-  const sentryProjectPatterns = [
-    /(?:sentry|century|error|issue)s?\s+(?:for|in|on)\s+(\w+)/i,
-    /(\w+)\s+(?:sentry|century|errors?|issues?)\b/i,
-    /(?:what(?:'s| is| are)?|show|check)\s+(?:the\s+)?(?:sentry|century\s+)?(?:errors?|issues?)\s+(?:for|in|on)\s+(\w+)/i
-  ];
+  const isSentryQuery = msgLower.match(/sentry|century/) ||
+                        (msgLower.match(/error|issue/) && !msgLower.match(/deploy|fail/));
 
-  for (const pattern of sentryProjectPatterns) {
-    const match = message.match(pattern);
-    if (match) {
-      const projectName = match[1].toLowerCase();
-      loadContexts();
-      const ctx = projectContexts[projectName];
-      if (ctx && ctx.sentryProject) {
-        return { action: 'sentry-project', params: { project: projectName, slug: ctx.sentryProject } };
+  if (isSentryQuery) {
+    loadContexts();
+
+    // Search for any project name or alias in the message
+    for (const [key, ctx] of Object.entries(projectContexts)) {
+      if (!ctx.sentryProject) continue;
+
+      // Check project name
+      if (msgLower.includes(key.toLowerCase())) {
+        return { action: 'sentry-project', params: { project: ctx.name || key, slug: ctx.sentryProject } };
+      }
+
+      // Check aliases (handles multi-word aliases like "liv in a")
+      if (ctx.aliases) {
+        for (const alias of ctx.aliases) {
+          if (msgLower.includes(alias.toLowerCase())) {
+            return { action: 'sentry-project', params: { project: ctx.name || key, slug: ctx.sentryProject } };
+          }
+        }
       }
     }
-  }
 
-  // Sentry queries - global: "any sentry issues", "any errors", "check sentry"
-  // Note: "century" is a common voice-to-text mishearing of "sentry"
-  if (msgLower.match(/(?:any|check|show)\s+(?:sentry|century\s+)?(?:errors?|issues?)/i) ||
-      msgLower.match(/(?:sentry|century)\s+(?:issues?|errors?|status)/i) ||
-      msgLower.includes('check sentry') ||
-      msgLower.includes('check century') ||
-      msgLower.includes('sentry check') ||
-      msgLower.includes('century check')) {
-    return { action: 'sentry-all', params: {} };
+    // No project found but still a sentry query - check all projects
+    if (msgLower.match(/(?:any|check|show|what)\s*(?:'s|is|are)?\s*(?:the\s+)?(?:sentry|century)/i) ||
+        msgLower.match(/(?:sentry|century)\s+(?:issues?|errors?|status)/i) ||
+        msgLower.includes('check sentry') ||
+        msgLower.includes('check century')) {
+      return { action: 'sentry-all', params: {} };
+    }
   }
 
   return null;

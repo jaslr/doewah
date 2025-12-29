@@ -2,6 +2,9 @@
 
 ## Aliases
 - livna-app
+- liv in a
+- livina
+- livena
 
 ## Description
 Job quoting and management application for tradies/contractors.
