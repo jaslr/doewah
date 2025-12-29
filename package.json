@@ -1,6 +1,6 @@
 {
   "name": "doewah",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "DigitalOcean Workstation for Executing Automated Helpers",
   "main": "bot/bot.js",
   "scripts": {

@@ -3,6 +3,10 @@
   "options": {
     "env": {
       "PATH": "${env:HOME}/flutter/bin:${env:PATH}"
+    },
+    "shell": {
+      "executable": "/bin/bash",
+      "args": ["-c", "source .env 2>/dev/null; \"$@\"", "--"]
     }
   },
   "tasks": [
@@ -25,7 +29,7 @@
     {
       "label": "Dev: Flutter Chrome (Local)",
       "type": "shell",
-      "command": "cd app && flutter run -d chrome --dart-define=WS_URL=ws://localhost:8405",
+      "command": "cd app && flutter run -d chrome --dart-define=WS_URL=ws://localhost:${WS_PORT:-8405}",
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -38,7 +42,7 @@
     {
       "label": "Dev: Flutter Linux Desktop (Local)",
       "type": "shell",
-      "command": "cd app && flutter run -d linux --dart-define=WS_URL=ws://localhost:8405",
+      "command": "cd app && flutter run -d linux --dart-define=WS_URL=ws://localhost:${WS_PORT:-8405}",
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -67,7 +71,7 @@
     {
       "label": "Build: Debug APK (Production)",
       "type": "shell",
-      "command": "cd app && flutter pub get && flutter build apk --debug --dart-define=WS_URL=ws://209.38.85.244:8405",
+      "command": "source .env && cd app && flutter pub get && flutter build apk --debug --dart-define=WS_URL=ws://${DROPLET_IP}:${WS_PORT}",
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -78,7 +82,7 @@
     {
       "label": "Build: Release APK (Production)",
       "type": "shell",
-      "command": "cd app && flutter pub get && flutter build apk --release --dart-define=WS_URL=ws://209.38.85.244:8405",
+      "command": "source .env && cd app && flutter pub get && flutter build apk --release --dart-define=WS_URL=ws://${DROPLET_IP}:${WS_PORT}",
       "group": "build",
       "problemMatcher": []
     },
@@ -91,25 +95,25 @@
     {
       "label": "Deploy: Pull & Install on Droplet",
       "type": "shell",
-      "command": "ssh root@209.38.85.244 'cd /root/doewah && git pull && npm install'",
+      "command": "source .env && ssh root@${DROPLET_IP} 'cd /root/doewah && git pull && npm install'",
       "problemMatcher": []
     },
     {
       "label": "Deploy: Restart WS Server on Droplet",
       "type": "shell",
-      "command": "ssh root@209.38.85.244 'pkill -f \"node ws/server.js\" || true && cd /root/doewah && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
+      "command": "source .env && ssh root@${DROPLET_IP} 'pkill -f \"node ws/server.js\" || true && cd /root/doewah && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
       "problemMatcher": []
     },
     {
       "label": "Deploy: Full (Pull + Restart WS)",
       "type": "shell",
-      "command": "ssh root@209.38.85.244 'cd /root/doewah && git pull && npm install && pkill -f \"node ws/server.js\" || true && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
+      "command": "source .env && ssh root@${DROPLET_IP} 'cd /root/doewah && git pull && npm install && pkill -f \"node ws/server.js\" || true && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
       "problemMatcher": []
     },
     {
       "label": "Deploy: View WS Server Logs",
       "type": "shell",
-      "command": "ssh root@209.38.85.244 'tail -f /root/logs/ws-server.log'",
+      "command": "source .env && ssh root@${DROPLET_IP} 'tail -f /root/logs/ws-server.log'",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
