@@ -89,7 +89,7 @@
     {
       "label": "Build: Open APK Folder",
       "type": "shell",
-      "command": "explorer.exe $(wslpath -w app/build/app/outputs/flutter-apk) || xdg-open app/build/app/outputs/flutter-apk",
+      "command": "explorer.exe $(wslpath -w app/build/app/outputs/apk) || xdg-open app/build/app/outputs/apk",
       "problemMatcher": []
     },
     {
