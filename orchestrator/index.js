@@ -446,6 +446,7 @@ module.exports = {
   loadContexts,
   getAvailableProjects,
   identifyProject,
+  detectAction,
   processMessage,
   runProjectTask,
   healthCheck,
