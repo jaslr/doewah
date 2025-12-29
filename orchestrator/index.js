@@ -17,6 +17,14 @@ const { queryLLM, healthCheck, LLM_PROVIDER } = require('./llm-adapter');
 
 const CONTEXTS_DIR = '/root/doewah/contexts';
 const PROJECTS_DIR = '/root/projects';
+const LOGS_DIR = '/root/logs';
+
+// Known GitHub accounts and their SSH host aliases
+const GITHUB_ACCOUNTS = {
+  'jaslr': 'github.com-jaslr',
+  'jvpux': 'github.com-jvpux',
+  'jvp-ux': 'github.com-jvpux'
+};
 
 // Cache of loaded project contexts
 let projectContexts = {};
@@ -188,11 +196,139 @@ Respond concisely. You're being read on a phone screen.`;
 }
 
 /**
+ * Detect if message contains an actionable command
+ * Returns: { action: string, params: object } or null
+ */
+function detectAction(message) {
+  const msgLower = message.toLowerCase();
+
+  // Clone detection: "clone jaslr livna" or "clone the livna project from jaslr"
+  const clonePatterns = [
+    /clone\s+(?:the\s+)?(\w+)\s+(?:from\s+)?(\w+)/i,  // "clone livna from jaslr"
+    /clone\s+(\w+)\s+(\w+)/i,                          // "clone jaslr livna"
+    /clone\s+(\w+)\/(\w+)/i                            // "clone jaslr/livna"
+  ];
+
+  for (const pattern of clonePatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      let [, first, second] = match;
+      // Determine which is account and which is repo
+      let account, repo;
+      if (GITHUB_ACCOUNTS[first.toLowerCase()]) {
+        account = first.toLowerCase();
+        repo = second;
+      } else if (GITHUB_ACCOUNTS[second.toLowerCase()]) {
+        account = second.toLowerCase();
+        repo = first;
+      } else {
+        // Default: assume first is account, second is repo
+        account = first.toLowerCase();
+        repo = second;
+      }
+      return { action: 'clone', params: { account, repo } };
+    }
+  }
+
+  // Status detection
+  if (msgLower.includes('status') || msgLower.includes('what projects') || msgLower.includes('list projects')) {
+    return { action: 'status', params: {} };
+  }
+
+  return null;
+}
+
+/**
+ * Execute a detected action
+ */
+function executeAction(action, params) {
+  switch (action) {
+    case 'clone':
+      return executeClone(params.account, params.repo);
+    case 'status':
+      return executeStatus();
+    default:
+      return { success: false, response: `Unknown action: ${action}` };
+  }
+}
+
+/**
+ * Clone a repository
+ */
+function executeClone(account, repoName) {
+  const gitHost = GITHUB_ACCOUNTS[account] || 'github.com';
+  const actualAccount = account === 'jvpux' ? 'jvp-ux' : account;
+  const repoUrl = `git@${gitHost}:${actualAccount}/${repoName}.git`;
+  const projectPath = path.join(PROJECTS_DIR, repoName);
+
+  if (fs.existsSync(projectPath)) {
+    return {
+      success: true,
+      response: `Project "${repoName}" already exists at ${projectPath}`
+    };
+  }
+
+  try {
+    execSync(`git clone ${repoUrl} ${projectPath}`, {
+      timeout: 120000,
+      stdio: 'pipe'
+    });
+    return {
+      success: true,
+      response: `✅ Cloned ${actualAccount}/${repoName}\n\nLocation: ${projectPath}\n\nNext: Create a context file with /context ${repoName}`
+    };
+  } catch (e) {
+    return {
+      success: false,
+      response: `❌ Clone failed: ${e.message}\n\nTried: ${repoUrl}`
+    };
+  }
+}
+
+/**
+ * Get system status
+ */
+function executeStatus() {
+  let status = '📊 *DOEWAH Status*\n\n';
+
+  // Active tmux sessions
+  try {
+    const sessions = execSync('tmux list-sessions 2>/dev/null', { encoding: 'utf8' });
+    status += '*Active Sessions:*\n';
+    sessions.trim().split('\n').forEach(line => {
+      const [name] = line.split(':');
+      status += `• \`${name}\`\n`;
+    });
+  } catch (e) {
+    status += '*Active Sessions:* None\n';
+  }
+
+  // Projects
+  const projects = getAvailableProjects();
+  status += `\n*Projects:* ${projects.length}\n`;
+  projects.forEach(p => status += `• ${p}\n`);
+
+  // Contexts
+  if (fs.existsSync(CONTEXTS_DIR)) {
+    const contexts = fs.readdirSync(CONTEXTS_DIR).filter(f => f.endsWith('.md') && !f.startsWith('_'));
+    status += `\n*Context Files:* ${contexts.length}`;
+  }
+
+  return { success: true, response: status };
+}
+
+/**
  * Process a natural language message
  * Returns: { response: string, action?: 'task'|'status'|'chat', project?: string, task?: string }
  */
 async function processMessage(message) {
-  // First, try to identify if this is about a specific project
+  // First, check for actionable commands
+  const detected = detectAction(message);
+  if (detected) {
+    return executeAction(detected.action, detected.params);
+  }
+
+  // If no action detected, try to identify if this is about a specific project
   const project = identifyProject(message);
 
   // Build context-aware prompt
