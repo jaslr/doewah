@@ -100,6 +100,81 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
 }
 
 /**
+ * Query using Claude Code CLI with streaming output
+ * @param {string} prompt - The prompt to send
+ * @param {object} options - Options including callbacks
+ * @returns {Promise<string>} - The full response when complete
+ */
+async function queryClaudeCodeStreaming(prompt, options = {}) {
+  const {
+    timeout = 120000,
+    workingDir = '/root',
+    onChunk = () => {},
+    onStep = () => {},
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    const oauthToken = getClaudeOAuthToken();
+    if (!oauthToken) {
+      reject(new Error('No Claude OAuth token found. Run: claude setup-token'));
+      return;
+    }
+
+    const cleanEnv = {
+      HOME: '/root',
+      PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+      TERM: 'xterm-256color',
+      CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
+    };
+
+    // Spawn claude CLI process for streaming
+    const child = spawn('claude', ['-p', prompt], {
+      cwd: workingDir,
+      env: cleanEnv,
+    });
+
+    let fullOutput = '';
+    let timeoutId = null;
+
+    // Set timeout
+    if (timeout > 0) {
+      timeoutId = setTimeout(() => {
+        child.kill();
+        reject(new Error('Claude Code timeout'));
+      }, timeout);
+    }
+
+    child.stdout.on('data', (data) => {
+      const chunk = data.toString();
+      fullOutput += chunk;
+      onChunk(chunk);
+    });
+
+    child.stderr.on('data', (data) => {
+      const text = data.toString();
+      // Parse step indicators from stderr
+      if (text.includes('Thinking') || text.includes('...')) {
+        onStep(text.trim());
+      }
+    });
+
+    child.on('close', (code) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (code === 0) {
+        resolve(fullOutput.trim());
+      } else {
+        reject(new Error(`Claude Code exited with code ${code}`));
+      }
+    });
+
+    child.on('error', (error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      reject(new Error(`Claude Code error: ${error.message}`));
+    });
+  });
+}
+
+/**
  * Query using Anthropic API directly (fallback/alternative)
  */
 async function queryAnthropicAPI(prompt, { timeout }) {
@@ -170,6 +245,7 @@ async function healthCheck() {
 
 module.exports = {
   queryLLM,
+  queryLLMStreaming: queryClaudeCodeStreaming,
   healthCheck,
   LLM_PROVIDER
 };

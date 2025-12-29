@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { execSync, spawn } = require('child_process');
-const { queryLLM, healthCheck, LLM_PROVIDER } = require('./llm-adapter');
+const { queryLLM, queryLLMStreaming, healthCheck, LLM_PROVIDER } = require('./llm-adapter');
 
 const CONTEXTS_DIR = '/root/doewah/contexts';
 const PROJECTS_DIR = '/root/projects';
@@ -1009,12 +1009,103 @@ echo "========================================"
   return { sessionName, logFile };
 }
 
+/**
+ * Execute a task with streaming callbacks (for WebSocket use)
+ * @param {string} message - The user's message/task
+ * @param {object} options - Options including callbacks
+ * @returns {Promise<string>} - The full response when complete
+ */
+async function executeWithStream(message, options = {}) {
+  const {
+    threadId,
+    projectHint,
+    llm,
+    onChunk = () => {},
+    onStep = () => {},
+    onConfirm = () => Promise.resolve(true),
+    onComplete = () => {},
+  } = options;
+
+  // First check for quick actions that don't need LLM
+  const detected = detectAction(message);
+  if (detected) {
+    const result = await executeAction(detected.action, detected.params);
+    if (!result.notSentry) {
+      onChunk(result.response);
+      onComplete(result.response);
+      return result.response;
+    }
+  }
+
+  // Identify project
+  let project = null;
+  if (projectHint) {
+    loadContexts();
+    project = projectContexts[projectHint] || { name: projectHint };
+  } else {
+    project = identifyProject(message);
+  }
+
+  // Build context
+  const systemPrompt = buildSystemPrompt();
+  let projectContext = '';
+
+  if (project) {
+    projectContext = `\n\nContext for ${project.name}:\n${project.raw || 'No detailed context available.'}`;
+
+    const projectPath = project.localPath || path.join(PROJECTS_DIR, project.name);
+    if (fs.existsSync(projectPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
+        projectContext += `\nCurrent version: ${pkg.version || 'unknown'}`;
+      } catch (e) {}
+
+      try {
+        const lastCommit = execSync('git log -1 --pretty=format:"%h %s (%ar)"', {
+          cwd: projectPath,
+          encoding: 'utf8'
+        });
+        projectContext += `\nLast commit: ${lastCommit}`;
+      } catch (e) {}
+    }
+  }
+
+  const fullPrompt = `${systemPrompt}${projectContext}
+
+User message: ${message}
+
+Respond helpfully and concisely.`;
+
+  const workingDir = project
+    ? (project.localPath || path.join(PROJECTS_DIR, project.name))
+    : '/root';
+
+  onStep('Processing request...');
+
+  try {
+    const response = await queryLLMStreaming(fullPrompt, {
+      timeout: 120000,
+      workingDir,
+      onChunk,
+      onStep,
+    });
+
+    onComplete(response);
+    return response;
+  } catch (error) {
+    const errorMsg = `Error: ${error.message}`;
+    onChunk(errorMsg);
+    throw error;
+  }
+}
+
 module.exports = {
   loadContexts,
   getAvailableProjects,
   identifyProject,
   detectAction,
   processMessage,
+  executeWithStream,
   runProjectTask,
   healthCheck,
   LLM_PROVIDER

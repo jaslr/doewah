@@ -1,15 +1,22 @@
 {
   "name": "doewah",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "DigitalOcean Workstation for Executing Automated Helpers",
   "main": "bot/bot.js",
   "scripts": {
-    "start": "node bot/bot.js"
+    "start": "node bot/bot.js",
+    "ws": "node ws/server.js",
+    "all": "node bot/bot.js & node ws/server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "uuid": "^11.0.3"
   },
   "keywords": [
     "telegram",
     "claude",
-    "automation"
+    "automation",
+    "websocket"
   ],
   "author": "jaslr",
   "license": "MIT"

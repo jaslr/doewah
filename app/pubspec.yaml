@@ -1,0 +1,37 @@
+name: doewah
+description: "Mobile DevOps control plane - manage projects, deployments, and infrastructure."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Networking
+  web_socket_channel: ^3.0.1
+  connectivity_plus: ^6.1.0
+
+  # Auth (Phase 2)
+  # google_sign_in: ^6.2.2
+
+  # Push notifications (Phase 2)
+  # firebase_core: ^3.8.0
+  # firebase_messaging: ^15.1.5
+  # flutter_local_notifications: ^18.0.1
+
+  # UI
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
