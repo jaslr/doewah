@@ -2,33 +2,67 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Flutter: Run in Chrome",
+      "label": "Dev: WebSocket Server (Local)",
       "type": "shell",
-      "command": "cd app && flutter run -d chrome",
-      "group": "test",
+      "command": "node ws/server.js",
+      "group": "build",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "dedicated"
+        "panel": "dedicated",
+        "group": "dev"
+      },
+      "isBackground": true,
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "Dev: Flutter Chrome (Local)",
+      "type": "shell",
+      "command": "cd app && flutter run -d chrome --dart-define=WS_URL=ws://localhost:8080",
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "dev"
       },
       "isBackground": true
     },
     {
-      "label": "Flutter: Run on Linux Desktop",
+      "label": "Dev: Flutter Linux Desktop (Local)",
       "type": "shell",
-      "command": "cd app && flutter run -d linux",
-      "group": "test",
+      "command": "cd app && flutter run -d linux --dart-define=WS_URL=ws://localhost:8080",
+      "group": "build",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "dedicated"
+        "panel": "dedicated",
+        "group": "dev"
       },
       "isBackground": true
     },
     {
-      "label": "Flutter: Build Debug APK",
+      "label": "Dev: Start All (WS + Chrome)",
+      "dependsOn": ["Dev: WebSocket Server (Local)", "Dev: Flutter Chrome (Local)"],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev: Start All (WS + Linux)",
+      "dependsOn": ["Dev: WebSocket Server (Local)", "Dev: Flutter Linux Desktop (Local)"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build: Debug APK (Production)",
       "type": "shell",
-      "command": "cd app && flutter pub get && flutter build apk --debug",
+      "command": "cd app && flutter pub get && flutter build apk --debug --dart-define=WS_URL=ws://209.38.85.244:8080",
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -37,40 +71,50 @@
       }
     },
     {
-      "label": "Flutter: Build Release APK",
+      "label": "Build: Release APK (Production)",
       "type": "shell",
-      "command": "cd app && flutter pub get && flutter build apk --release",
+      "command": "cd app && flutter pub get && flutter build apk --release --dart-define=WS_URL=ws://209.38.85.244:8080",
       "group": "build",
       "problemMatcher": []
     },
     {
-      "label": "Flutter: Open APK Folder",
+      "label": "Build: Open APK Folder",
       "type": "shell",
-      "command": "explorer.exe app\\build\\app\\outputs\\flutter-apk || xdg-open app/build/app/outputs/flutter-apk || open app/build/app/outputs/flutter-apk",
-      "problemMatcher": [],
-      "dependsOn": "Flutter: Build Debug APK"
+      "command": "explorer.exe $(wslpath -w app/build/app/outputs/flutter-apk) || xdg-open app/build/app/outputs/flutter-apk",
+      "problemMatcher": []
     },
     {
-      "label": "Deploy: WebSocket Server to Droplet",
+      "label": "Deploy: Pull & Install on Droplet",
       "type": "shell",
       "command": "ssh root@209.38.85.244 'cd /root/doewah && git pull && npm install'",
       "problemMatcher": []
     },
     {
-      "label": "Deploy: Start WebSocket Server",
+      "label": "Deploy: Restart WS Server on Droplet",
       "type": "shell",
-      "command": "ssh root@209.38.85.244 'cd /root/doewah && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
+      "command": "ssh root@209.38.85.244 'pkill -f \"node ws/server.js\" || true && cd /root/doewah && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
       "problemMatcher": []
     },
     {
-      "label": "Deploy: Full (Pull + WS Server)",
+      "label": "Deploy: Full (Pull + Restart WS)",
       "type": "shell",
       "command": "ssh root@209.38.85.244 'cd /root/doewah && git pull && npm install && pkill -f \"node ws/server.js\" || true && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
       "problemMatcher": []
     },
     {
-      "label": "Doewah: Build & Deploy All",
-      "dependsOn": ["Flutter: Build Debug APK", "Deploy: Full (Pull + WS Server)"],
+      "label": "Deploy: View WS Server Logs",
+      "type": "shell",
+      "command": "ssh root@209.38.85.244 'tail -f /root/logs/ws-server.log'",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Ship: Build APK + Deploy WS",
+      "dependsOn": ["Build: Debug APK (Production)", "Deploy: Full (Pull + Restart WS)"],
       "dependsOrder": "sequence",
       "problemMatcher": []
     }

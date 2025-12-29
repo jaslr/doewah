@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/config.dart';
 import '../../core/websocket/websocket_service.dart';
 import 'threads_provider.dart';
 import 'chat_screen.dart';
@@ -16,10 +17,9 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
   void initState() {
     super.initState();
     // Connect to WebSocket on startup
-    // TODO: Replace with actual server URL and auth
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final wsService = ref.read(webSocketServiceProvider);
-      wsService.connect('ws://209.38.85.244:8080');
+      wsService.connect(AppConfig.wsUrl);
     });
   }
 
