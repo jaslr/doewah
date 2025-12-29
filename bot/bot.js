@@ -455,19 +455,19 @@ try {
   console.error('Could not read version:', e.message);
 }
 
-// Format date as "29 Dec 2025, 11:09 AM"
+// Format date as "29 Dec 2025, 11:09 AM" in Sydney timezone
 function formatStartupTime() {
   const now = new Date();
-  const day = now.getDate();
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = months[now.getMonth()];
-  const year = now.getFullYear();
-  let hours = now.getHours();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  const mins = now.getMinutes().toString().padStart(2, '0');
-  return `${day} ${month} ${year}, ${hours}:${mins} ${ampm}`;
+  const options = {
+    timeZone: 'Australia/Sydney',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  };
+  return now.toLocaleString('en-AU', options).replace(',', '');
 }
 
 console.log(`DOEWAH v${version} starting...`);
