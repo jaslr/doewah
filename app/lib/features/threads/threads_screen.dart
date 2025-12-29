@@ -20,11 +20,15 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
     super.initState();
     // Connect to WebSocket on startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final wsService = ref.read(webSocketServiceProvider);
-      wsService.connect(AppConfig.wsUrl);
+      try {
+        final wsService = ref.read(webSocketServiceProvider);
+        wsService.connect(AppConfig.wsUrl);
 
-      // Check for updates
-      showUpdateDialogIfAvailable(context, ref);
+        // Check for updates (non-blocking)
+        showUpdateDialogIfAvailable(context, ref);
+      } catch (e) {
+        debugPrint('Startup error: $e');
+      }
     });
   }
 

@@ -151,14 +151,19 @@ class UpdateDialog extends ConsumerWidget {
 
 /// Shows update dialog if an update is available
 Future<void> showUpdateDialogIfAvailable(BuildContext context, WidgetRef ref) async {
-  await ref.read(updateProvider.notifier).checkForUpdate();
-  final state = ref.read(updateProvider);
+  try {
+    await ref.read(updateProvider.notifier).checkForUpdate();
+    final state = ref.read(updateProvider);
 
-  if (state.status == UpdateStatus.available && context.mounted) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const UpdateDialog(),
-    );
+    if (state.status == UpdateStatus.available && context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const UpdateDialog(),
+      );
+    }
+  } catch (e) {
+    // Silently fail - don't crash app if update check fails
+    debugPrint('Update check failed: $e');
   }
 }
