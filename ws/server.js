@@ -2,7 +2,7 @@ const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const orchestrator = require('../orchestrator');
 
-const PORT = process.env.WS_PORT || 8080;
+const PORT = process.env.WS_PORT || 8405;
 
 // Store active connections and threads
 const connections = new Map();

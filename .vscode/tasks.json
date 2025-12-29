@@ -1,5 +1,10 @@
 {
   "version": "2.0.0",
+  "options": {
+    "env": {
+      "PATH": "${env:HOME}/flutter/bin:${env:PATH}"
+    }
+  },
   "tasks": [
     {
       "label": "Dev: WebSocket Server (Local)",
@@ -20,7 +25,7 @@
     {
       "label": "Dev: Flutter Chrome (Local)",
       "type": "shell",
-      "command": "cd app && flutter run -d chrome --dart-define=WS_URL=ws://localhost:8080",
+      "command": "cd app && flutter run -d chrome --dart-define=WS_URL=ws://localhost:8405",
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -33,7 +38,7 @@
     {
       "label": "Dev: Flutter Linux Desktop (Local)",
       "type": "shell",
-      "command": "cd app && flutter run -d linux --dart-define=WS_URL=ws://localhost:8080",
+      "command": "cd app && flutter run -d linux --dart-define=WS_URL=ws://localhost:8405",
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -62,7 +67,7 @@
     {
       "label": "Build: Debug APK (Production)",
       "type": "shell",
-      "command": "cd app && flutter pub get && flutter build apk --debug --dart-define=WS_URL=ws://209.38.85.244:8080",
+      "command": "cd app && flutter pub get && flutter build apk --debug --dart-define=WS_URL=ws://209.38.85.244:8405",
       "group": "build",
       "problemMatcher": [],
       "presentation": {
@@ -73,7 +78,7 @@
     {
       "label": "Build: Release APK (Production)",
       "type": "shell",
-      "command": "cd app && flutter pub get && flutter build apk --release --dart-define=WS_URL=ws://209.38.85.244:8080",
+      "command": "cd app && flutter pub get && flutter build apk --release --dart-define=WS_URL=ws://209.38.85.244:8405",
       "group": "build",
       "problemMatcher": []
     },
