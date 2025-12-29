@@ -24,6 +24,11 @@ const LOGS_DIR = '/root/logs';
 const ORCHON_URL = process.env.OBSERVATORY_URL || 'https://observatory-backend.fly.dev';
 const ORCHON_SECRET = process.env.OBSERVATORY_API_SECRET;
 
+// Sentry integration
+const SENTRY_BASE_URL = process.env.SENTRY_BASE_URL || 'https://de.sentry.io';
+const SENTRY_AUTH_TOKEN = process.env.SENTRY_AUTH_TOKEN;
+const SENTRY_ORG = process.env.SENTRY_ORG;
+
 // Known GitHub accounts and their SSH host aliases
 const GITHUB_ACCOUNTS = {
   'jaslr': 'github.com-jaslr',
@@ -196,6 +201,177 @@ async function executeRecentDeployments(limit = 10) {
     return { success: true, response };
   } catch (e) {
     return { success: false, response: `Failed to query ORCHON: ${e.message}` };
+  }
+}
+
+// =============================================================================
+// Sentry API Client
+// =============================================================================
+
+/**
+ * Query Sentry API endpoint
+ */
+function querySentry(endpoint) {
+  return new Promise((resolve, reject) => {
+    if (!SENTRY_AUTH_TOKEN) {
+      reject(new Error('SENTRY_AUTH_TOKEN not configured'));
+      return;
+    }
+
+    const url = new URL(endpoint, SENTRY_BASE_URL);
+
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${SENTRY_AUTH_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          if (res.statusCode === 200) {
+            resolve(JSON.parse(data));
+          } else {
+            reject(new Error(`Sentry API ${res.statusCode}: ${data.substring(0, 100)}`));
+          }
+        } catch (e) {
+          reject(new Error(`Invalid JSON: ${data.substring(0, 100)}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(15000, () => {
+      req.destroy();
+      reject(new Error('Sentry request timeout'));
+    });
+    req.end();
+  });
+}
+
+/**
+ * Format a Sentry issue for Telegram display
+ */
+function formatSentryIssue(issue) {
+  const lastSeen = new Date(issue.lastSeen).toLocaleString('en-AU', {
+    timeZone: 'Australia/Sydney',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const location = issue.culprit ? issue.culprit.substring(0, 30) : '/';
+  return `• *${issue.shortId}*: ${issue.title.substring(0, 40)}${issue.title.length > 40 ? '...' : ''}\n  └ ${issue.count}x, ${lastSeen}, ${location}`;
+}
+
+/**
+ * Get Sentry issues for a specific project
+ */
+async function executeSentryProjectIssues(projectSlug, limit = 5) {
+  try {
+    if (!SENTRY_ORG) {
+      return { success: false, response: 'SENTRY_ORG not configured' };
+    }
+
+    const issues = await querySentry(
+      `/api/0/projects/${SENTRY_ORG}/${projectSlug}/issues/?statsPeriod=24h&limit=${limit}`
+    );
+
+    if (!issues || issues.length === 0) {
+      return { success: true, response: `✅ *${projectSlug}*: No Sentry issues in the last 24h` };
+    }
+
+    let response = `🔴 *${projectSlug}* (${issues.length} issue${issues.length > 1 ? 's' : ''}, 24h)\n\n`;
+    for (const issue of issues.slice(0, limit)) {
+      response += formatSentryIssue(issue) + '\n';
+    }
+
+    if (issues.length > 0) {
+      response += `\n🔗 ${issues[0].permalink.split('/issues/')[0]}/issues/`;
+    }
+
+    return { success: true, response };
+  } catch (e) {
+    return { success: false, response: `Failed to query Sentry: ${e.message}` };
+  }
+}
+
+/**
+ * Get Sentry issues across all configured projects
+ */
+async function executeSentryAllIssues(limit = 10) {
+  try {
+    if (!SENTRY_ORG || !SENTRY_AUTH_TOKEN) {
+      return { success: false, response: 'Sentry not configured (missing SENTRY_ORG or SENTRY_AUTH_TOKEN)' };
+    }
+
+    loadContexts();
+
+    // Find all projects with Sentry configured
+    const sentryProjects = [];
+    const seen = new Set();
+    for (const [key, ctx] of Object.entries(projectContexts)) {
+      if (ctx.sentryProject && !seen.has(ctx.sentryProject)) {
+        seen.add(ctx.sentryProject);
+        sentryProjects.push({ name: ctx.name || key, slug: ctx.sentryProject });
+      }
+    }
+
+    if (sentryProjects.length === 0) {
+      return { success: false, response: 'No projects have Sentry configured' };
+    }
+
+    // Query all projects
+    const allIssues = [];
+    for (const proj of sentryProjects) {
+      try {
+        const issues = await querySentry(
+          `/api/0/projects/${SENTRY_ORG}/${proj.slug}/issues/?statsPeriod=24h&limit=5`
+        );
+        if (issues && issues.length > 0) {
+          for (const issue of issues) {
+            issue._projectName = proj.name;
+            allIssues.push(issue);
+          }
+        }
+      } catch (e) {
+        // Skip projects that fail (might not exist in Sentry)
+      }
+    }
+
+    if (allIssues.length === 0) {
+      return { success: true, response: `✅ No Sentry issues across ${sentryProjects.length} project${sentryProjects.length > 1 ? 's' : ''} (24h)` };
+    }
+
+    // Sort by lastSeen
+    allIssues.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
+
+    let response = `🔴 *Sentry Issues* (${allIssues.length} across ${sentryProjects.length} project${sentryProjects.length > 1 ? 's' : ''})\n\n`;
+
+    let currentProject = null;
+    let count = 0;
+    for (const issue of allIssues) {
+      if (count >= limit) break;
+
+      if (issue._projectName !== currentProject) {
+        currentProject = issue._projectName;
+        response += `*${currentProject}*:\n`;
+      }
+      response += formatSentryIssue(issue) + '\n';
+      count++;
+    }
+
+    return { success: true, response };
+  } catch (e) {
+    return { success: false, response: `Failed to query Sentry: ${e.message}` };
   }
 }
 
@@ -465,6 +641,33 @@ function detectAction(message) {
     }
   }
 
+  // Sentry queries - project-specific: "sentry issues for livna", "livna errors", "livna sentry"
+  const sentryProjectPatterns = [
+    /(?:sentry|error|issue)s?\s+(?:for|in|on)\s+(\w+)/i,
+    /(\w+)\s+(?:sentry|errors?|issues?)\b/i,
+    /(?:what(?:'s| is| are)?|show|check)\s+(?:the\s+)?(?:sentry\s+)?(?:errors?|issues?)\s+(?:for|in|on)\s+(\w+)/i
+  ];
+
+  for (const pattern of sentryProjectPatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      const projectName = match[1].toLowerCase();
+      loadContexts();
+      const ctx = projectContexts[projectName];
+      if (ctx && ctx.sentryProject) {
+        return { action: 'sentry-project', params: { project: projectName, slug: ctx.sentryProject } };
+      }
+    }
+  }
+
+  // Sentry queries - global: "any sentry issues", "any errors", "check sentry"
+  if (msgLower.match(/(?:any|check|show)\s+(?:sentry\s+)?(?:errors?|issues?)/i) ||
+      msgLower.match(/sentry\s+(?:issues?|errors?|status)/i) ||
+      msgLower.includes('check sentry') ||
+      msgLower.includes('sentry check')) {
+    return { action: 'sentry-all', params: {} };
+  }
+
   return null;
 }
 
@@ -487,6 +690,10 @@ async function executeAction(action, params) {
       return executeRecentDeployments(params.limit || 10);
     case 'orchon-summary':
       return executeDeploymentSummary();
+    case 'sentry-project':
+      return executeSentryProjectIssues(params.slug);
+    case 'sentry-all':
+      return executeSentryAllIssues();
     default:
       return { success: false, response: `Unknown action: ${action}` };
   }

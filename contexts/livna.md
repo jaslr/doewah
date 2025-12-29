@@ -22,7 +22,7 @@ Job quoting and management application for tradies/contractors.
 - **Production URL**: https://livna.app (or similar)
 
 ## Monitoring
-- **Sentry Project**: livna
+- **Sentry Project**: livna-stable-construction
 
 ## Key Files
 - Entry point: src/routes/+page.svelte
