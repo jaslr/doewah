@@ -63,25 +63,33 @@ function getClaudeOAuthToken() {
 async function queryClaudeCode(prompt, { timeout, workingDir }) {
   return new Promise((resolve, reject) => {
     try {
-      // Get OAuth token from credentials file
+      // Get OAuth token fresh from credentials file (not from process.env)
       const oauthToken = getClaudeOAuthToken();
       if (!oauthToken) {
         reject(new Error('No Claude OAuth token found. Run: claude setup-token'));
         return;
       }
 
+      // Build a MINIMAL clean environment - don't inherit polluted process.env
+      // Only include what Claude absolutely needs
+      const cleanEnv = {
+        HOME: '/root',
+        PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+        TERM: 'xterm-256color',
+        CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
+      };
+
+      // Escape prompt for shell (use single quotes and escape internal single quotes)
+      const escapedPrompt = prompt.replace(/'/g, "'\\''");
+
       // Use claude CLI with print mode
       const result = execSync(
-        `claude -p "${prompt.replace(/"/g, '\\"')}"`,
+        `claude -p '${escapedPrompt}'`,
         {
           cwd: workingDir,
           timeout,
           encoding: 'utf8',
-          env: {
-            ...process.env,
-            HOME: '/root',
-            CLAUDE_CODE_OAUTH_TOKEN: oauthToken
-          }
+          env: cleanEnv
         }
       );
       resolve(result.trim());
