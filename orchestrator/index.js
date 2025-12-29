@@ -642,10 +642,11 @@ function detectAction(message) {
   }
 
   // Sentry queries - project-specific: "sentry issues for livna", "livna errors", "livna sentry"
+  // Note: "century" is a common voice-to-text mishearing of "sentry"
   const sentryProjectPatterns = [
-    /(?:sentry|error|issue)s?\s+(?:for|in|on)\s+(\w+)/i,
-    /(\w+)\s+(?:sentry|errors?|issues?)\b/i,
-    /(?:what(?:'s| is| are)?|show|check)\s+(?:the\s+)?(?:sentry\s+)?(?:errors?|issues?)\s+(?:for|in|on)\s+(\w+)/i
+    /(?:sentry|century|error|issue)s?\s+(?:for|in|on)\s+(\w+)/i,
+    /(\w+)\s+(?:sentry|century|errors?|issues?)\b/i,
+    /(?:what(?:'s| is| are)?|show|check)\s+(?:the\s+)?(?:sentry|century\s+)?(?:errors?|issues?)\s+(?:for|in|on)\s+(\w+)/i
   ];
 
   for (const pattern of sentryProjectPatterns) {
@@ -661,10 +662,13 @@ function detectAction(message) {
   }
 
   // Sentry queries - global: "any sentry issues", "any errors", "check sentry"
-  if (msgLower.match(/(?:any|check|show)\s+(?:sentry\s+)?(?:errors?|issues?)/i) ||
-      msgLower.match(/sentry\s+(?:issues?|errors?|status)/i) ||
+  // Note: "century" is a common voice-to-text mishearing of "sentry"
+  if (msgLower.match(/(?:any|check|show)\s+(?:sentry|century\s+)?(?:errors?|issues?)/i) ||
+      msgLower.match(/(?:sentry|century)\s+(?:issues?|errors?|status)/i) ||
       msgLower.includes('check sentry') ||
-      msgLower.includes('sentry check')) {
+      msgLower.includes('check century') ||
+      msgLower.includes('sentry check') ||
+      msgLower.includes('century check')) {
     return { action: 'sentry-all', params: {} };
   }
 
