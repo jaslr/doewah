@@ -167,6 +167,38 @@ async function executeDeploymentSummary() {
   }
 }
 
+/**
+ * Get recent deployments (all, not just failures) from ORCHON
+ */
+async function executeRecentDeployments(limit = 10) {
+  try {
+    const result = await queryOrchon(`/api/deployments/recent?limit=${limit}`);
+    if (!result.deployments || result.deployments.length === 0) {
+      return { success: true, response: 'No recent deployments found.' };
+    }
+
+    let response = `📦 *Recent Deployments (${result.deployments.length})*\n\n`;
+    for (const d of result.deployments) {
+      const when = (d.deployCompletedAt || d.completedAt)
+        ? new Date(d.deployCompletedAt || d.completedAt).toLocaleString('en-AU', {
+            timeZone: 'Australia/Sydney',
+            day: 'numeric',
+            month: 'short',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          })
+        : '?';
+      const icon = d.status === 'success' ? '✅' : d.status === 'failure' ? '❌' : '🔄';
+      response += `${icon} *${d.projectDisplayName || d.projectName}* (${d.provider}) - ${when}\n`;
+    }
+
+    return { success: true, response };
+  } catch (e) {
+    return { success: false, response: `Failed to query ORCHON: ${e.message}` };
+  }
+}
+
 // Cache of loaded project contexts
 let projectContexts = {};
 let lastContextLoad = 0;
@@ -376,12 +408,15 @@ function detectAction(message) {
     return { action: 'status', params: {} };
   }
 
-  // ORCHON deployment queries
-  // "what failed?" "any failures?" "last failure" "recent failures"
+  // ORCHON deployment queries - catch ANY deployment-related question
+  // This routes to ORCHON for fast data retrieval instead of LLM guessing
+
+  // Failure-specific queries
   if (msgLower.match(/(?:what|show|any|last|recent)\s*(?:deployment)?\s*fail/i) ||
       msgLower.includes('what broke') ||
-      msgLower.includes('what went wrong')) {
-    // Check if asking for multiple or just last
+      msgLower.includes('what went wrong') ||
+      msgLower.includes('any errors') ||
+      msgLower.includes('any problems')) {
     if (msgLower.includes('recent') || msgLower.includes('all') || msgLower.includes('show me')) {
       const limitMatch = msgLower.match(/(\d+)/);
       const limit = limitMatch ? parseInt(limitMatch[1], 10) : 5;
@@ -390,10 +425,23 @@ function detectAction(message) {
     return { action: 'orchon-last-failure', params: {} };
   }
 
-  // "how's everything?" "deployment status" "how are things looking?"
-  if (msgLower.match(/how(?:'s| is| are)\s*(?:everything|things|deployments?|it)\s*(?:looking|going)?/i) ||
+  // General deployment queries - "last deployment", "recent deployments", "what deployed"
+  if (msgLower.match(/(?:what|show|last|recent|latest)\s*(?:was\s*)?(?:the\s*)?deploy/i) ||
+      msgLower.match(/deploy(?:ment)?s?\s*(?:lately|recently|today|this week)?/i) ||
+      msgLower.includes('what shipped') ||
+      msgLower.includes('what went live') ||
+      msgLower.includes('what got deployed')) {
+    const limitMatch = msgLower.match(/(\d+)/);
+    const limit = limitMatch ? parseInt(limitMatch[1], 10) : 10;
+    return { action: 'orchon-deployments', params: { limit } };
+  }
+
+  // Status/health queries - "how's everything?" "deployment status" "how are things looking?"
+  if (msgLower.match(/how(?:'s| is| are)\s*(?:everything|things|deployments?|it|infra)\s*(?:looking|going|doing)?/i) ||
       msgLower.includes('deployment status') ||
       msgLower.includes('infra status') ||
+      msgLower.includes('system status') ||
+      msgLower.includes('health check') ||
       (msgLower.includes('status') && !msgLower.match(/\b\w+\s+status/))) {
     return { action: 'orchon-summary', params: {} };
   }
@@ -435,6 +483,8 @@ async function executeAction(action, params) {
       return executeLastFailure();
     case 'orchon-failures':
       return executeRecentFailures(params.limit || 5);
+    case 'orchon-deployments':
+      return executeRecentDeployments(params.limit || 10);
     case 'orchon-summary':
       return executeDeploymentSummary();
     default:
