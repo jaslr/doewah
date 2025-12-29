@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config.dart';
 import '../../core/websocket/websocket_service.dart';
+import '../../core/updates/update_service.dart';
+import '../../core/updates/update_dialog.dart';
 import 'threads_provider.dart';
 import 'chat_screen.dart';
 
@@ -20,6 +22,9 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final wsService = ref.read(webSocketServiceProvider);
       wsService.connect(AppConfig.wsUrl);
+
+      // Check for updates
+      showUpdateDialogIfAvailable(context, ref);
     });
   }
 
