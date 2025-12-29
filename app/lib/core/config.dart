@@ -1,9 +1,8 @@
 /// App configuration
 class AppConfig {
   /// WebSocket server URL
-  /// Change this based on environment:
-  /// - Local dev: ws://localhost:8405
-  /// - Production: ws://209.38.85.244:8405
+  /// Set via --dart-define=WS_URL=... at build time
+  /// Default: localhost for local dev
   static const String wsUrl = String.fromEnvironment(
     'WS_URL',
     defaultValue: 'ws://localhost:8405',
