@@ -12,6 +12,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 const { execSync, spawn } = require('child_process');
 const { queryLLM, healthCheck, LLM_PROVIDER } = require('./llm-adapter');
 
@@ -19,12 +20,152 @@ const CONTEXTS_DIR = '/root/doewah/contexts';
 const PROJECTS_DIR = '/root/projects';
 const LOGS_DIR = '/root/logs';
 
+// ORCHON (Observatory) integration
+const ORCHON_URL = process.env.OBSERVATORY_URL || 'https://observatory-backend.fly.dev';
+const ORCHON_SECRET = process.env.OBSERVATORY_API_SECRET;
+
 // Known GitHub accounts and their SSH host aliases
 const GITHUB_ACCOUNTS = {
   'jaslr': 'github.com-jaslr',
   'jvpux': 'github.com-jvpux',
   'jvp-ux': 'github.com-jvpux'
 };
+
+// =============================================================================
+// ORCHON (Observatory) API Client
+// =============================================================================
+
+/**
+ * Query ORCHON API endpoint
+ */
+function queryOrchon(endpoint) {
+  return new Promise((resolve, reject) => {
+    if (!ORCHON_SECRET) {
+      reject(new Error('OBSERVATORY_API_SECRET not configured'));
+      return;
+    }
+
+    const url = new URL(endpoint, ORCHON_URL);
+
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${ORCHON_SECRET}`,
+        'Content-Type': 'application/json'
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error(`Invalid JSON: ${data.substring(0, 100)}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(10000, () => {
+      req.destroy();
+      reject(new Error('ORCHON request timeout'));
+    });
+    req.end();
+  });
+}
+
+/**
+ * Get last deployment failure from ORCHON
+ */
+async function executeLastFailure() {
+  try {
+    const result = await queryOrchon('/api/deployments/last-failure');
+    if (!result.deployment) {
+      return { success: true, response: '✅ No recent deployment failures!' };
+    }
+
+    const d = result.deployment;
+    const when = d.completedAt ? new Date(d.completedAt).toLocaleString('en-AU', {
+      timeZone: 'Australia/Sydney',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }) : 'unknown time';
+
+    return {
+      success: true,
+      response: `❌ *Last Failure*\n\n*Project:* ${d.projectDisplayName || d.projectName}\n*Provider:* ${d.provider}\n*Branch:* ${d.branch || 'main'}\n*When:* ${when}`
+    };
+  } catch (e) {
+    return { success: false, response: `Failed to query ORCHON: ${e.message}` };
+  }
+}
+
+/**
+ * Get recent failures from ORCHON
+ */
+async function executeRecentFailures(limit = 5) {
+  try {
+    const result = await queryOrchon(`/api/deployments/failures?limit=${limit}`);
+    if (!result.deployments || result.deployments.length === 0) {
+      return { success: true, response: '✅ No recent deployment failures!' };
+    }
+
+    let response = `❌ *Recent Failures (${result.deployments.length})*\n\n`;
+    for (const d of result.deployments) {
+      const when = d.completedAt ? new Date(d.completedAt).toLocaleString('en-AU', {
+        timeZone: 'Australia/Sydney',
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }) : '?';
+      response += `• *${d.projectDisplayName || d.projectName}* (${d.provider}) - ${when}\n`;
+    }
+
+    return { success: true, response };
+  } catch (e) {
+    return { success: false, response: `Failed to query ORCHON: ${e.message}` };
+  }
+}
+
+/**
+ * Get deployment status summary from ORCHON
+ */
+async function executeDeploymentSummary() {
+  try {
+    const result = await queryOrchon('/api/status/summary');
+
+    let response = '📊 *Deployment Status*\n\n';
+    response += `✅ Healthy: ${result.healthy || 0}\n`;
+    response += `⚠️ Degraded: ${result.degraded || 0}\n`;
+    response += `❌ Down: ${result.down || 0}\n`;
+
+    if (result.lastFailure) {
+      const d = result.lastFailure;
+      const when = d.completedAt ? new Date(d.completedAt).toLocaleString('en-AU', {
+        timeZone: 'Australia/Sydney',
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }) : '?';
+      response += `\n*Last failure:* ${d.projectDisplayName || d.projectName} (${when})`;
+    }
+
+    return { success: true, response };
+  } catch (e) {
+    return { success: false, response: `Failed to query ORCHON: ${e.message}` };
+  }
+}
 
 // Cache of loaded project contexts
 let projectContexts = {};
@@ -231,8 +372,30 @@ function detectAction(message) {
   }
 
   // Status detection
-  if (msgLower.includes('status') || msgLower.includes('what projects') || msgLower.includes('list projects')) {
+  if (msgLower.includes('what projects') || msgLower.includes('list projects')) {
     return { action: 'status', params: {} };
+  }
+
+  // ORCHON deployment queries
+  // "what failed?" "any failures?" "last failure" "recent failures"
+  if (msgLower.match(/(?:what|show|any|last|recent)\s*(?:deployment)?\s*fail/i) ||
+      msgLower.includes('what broke') ||
+      msgLower.includes('what went wrong')) {
+    // Check if asking for multiple or just last
+    if (msgLower.includes('recent') || msgLower.includes('all') || msgLower.includes('show me')) {
+      const limitMatch = msgLower.match(/(\d+)/);
+      const limit = limitMatch ? parseInt(limitMatch[1], 10) : 5;
+      return { action: 'orchon-failures', params: { limit } };
+    }
+    return { action: 'orchon-last-failure', params: {} };
+  }
+
+  // "how's everything?" "deployment status" "how are things looking?"
+  if (msgLower.match(/how(?:'s| is| are)\s*(?:everything|things|deployments?|it)\s*(?:looking|going)?/i) ||
+      msgLower.includes('deployment status') ||
+      msgLower.includes('infra status') ||
+      (msgLower.includes('status') && !msgLower.match(/\b\w+\s+status/))) {
+    return { action: 'orchon-summary', params: {} };
   }
 
   // Version check detection: "what version is livna" or "livna version"
@@ -260,7 +423,7 @@ function detectAction(message) {
 /**
  * Execute a detected action
  */
-function executeAction(action, params) {
+async function executeAction(action, params) {
   switch (action) {
     case 'clone':
       return executeClone(params.account, params.repo);
@@ -268,6 +431,12 @@ function executeAction(action, params) {
       return executeStatus();
     case 'version':
       return executeVersion(params.project);
+    case 'orchon-last-failure':
+      return executeLastFailure();
+    case 'orchon-failures':
+      return executeRecentFailures(params.limit || 5);
+    case 'orchon-summary':
+      return executeDeploymentSummary();
     default:
       return { success: false, response: `Unknown action: ${action}` };
   }

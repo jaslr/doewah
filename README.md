@@ -186,6 +186,54 @@ tmux attach -t session-name
 Ctrl+B, then D
 ```
 
+## ORCHON Integration
+
+DoeWah works with [ORCHON](https://github.com/jaslr/orchon) (the Infrastructure Observatory) to answer questions about deployments across all projects.
+
+### What DoeWah Asks ORCHON
+
+When a user asks "what failed last?" or "how are deployments looking?", DoeWah queries ORCHON's backend:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/deployments/last-failure` | Most recent failed deployment |
+| `GET /api/deployments/failures?limit=N` | Last N failures |
+| `GET /api/status/summary` | Overall health + counts |
+
+### Authentication
+
+DoeWah authenticates to ORCHON using:
+```
+Authorization: Bearer <OBSERVATORY_API_SECRET>
+```
+
+The `OBSERVATORY_API_SECRET` in DoeWah's `.env` must match the `API_SECRET` in ORCHON's observatory-backend.
+
+### Response Format
+
+ORCHON returns deployment data like:
+```json
+{
+  "deployment": {
+    "projectId": "livna",
+    "projectName": "Livna",
+    "status": "failure",
+    "provider": "fly",
+    "branch": "main",
+    "completedAt": "2025-12-29T10:30:00Z"
+  }
+}
+```
+
+### For ORCHON Developers
+
+If you're here from ORCHON to integrate:
+
+1. DoeWah lives at `/home/chip/doewah`
+2. Bot code is in `bot/bot.js`
+3. Add `OBSERVATORY_API_SECRET` to `.env` (same value as your `API_SECRET`)
+4. DoeWah will call your endpoints at `https://observatory-backend.fly.dev`
+
 ## Cost
 
 - DigitalOcean Droplet: **$6-12/mo** (hard cap, won't exceed)
