@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flutter: Build Debug APK",
+      "type": "shell",
+      "command": "cd app && flutter pub get && flutter build apk --debug",
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Flutter: Build Release APK",
+      "type": "shell",
+      "command": "cd app && flutter pub get && flutter build apk --release",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Open APK Folder",
+      "type": "shell",
+      "command": "explorer.exe app\\build\\app\\outputs\\flutter-apk || xdg-open app/build/app/outputs/flutter-apk || open app/build/app/outputs/flutter-apk",
+      "problemMatcher": [],
+      "dependsOn": "Flutter: Build Debug APK"
+    },
+    {
+      "label": "Deploy: WebSocket Server to Droplet",
+      "type": "shell",
+      "command": "ssh root@209.38.85.244 'cd /root/doewah && git pull && npm install'",
+      "problemMatcher": []
+    },
+    {
+      "label": "Deploy: Start WebSocket Server",
+      "type": "shell",
+      "command": "ssh root@209.38.85.244 'cd /root/doewah && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
+      "problemMatcher": []
+    },
+    {
+      "label": "Deploy: Full (Pull + WS Server)",
+      "type": "shell",
+      "command": "ssh root@209.38.85.244 'cd /root/doewah && git pull && npm install && pkill -f \"node ws/server.js\" || true && nohup node ws/server.js > /root/logs/ws-server.log 2>&1 &'",
+      "problemMatcher": []
+    },
+    {
+      "label": "Doewah: Build & Deploy All",
+      "dependsOn": ["Flutter: Build Debug APK", "Deploy: Full (Pull + WS Server)"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}
