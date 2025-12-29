@@ -235,6 +235,25 @@ function detectAction(message) {
     return { action: 'status', params: {} };
   }
 
+  // Version check detection: "what version is livna" or "livna version"
+  const versionPatterns = [
+    /(?:what|check|get|show)\s+(?:is\s+)?(?:the\s+)?version\s+(?:of\s+)?(\w+)/i,
+    /(\w+)\s+version/i,
+    /version\s+(?:of\s+)?(\w+)/i
+  ];
+
+  for (const pattern of versionPatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      const projectName = match[1].toLowerCase();
+      // Check if it's a known project
+      loadContexts();
+      if (projectContexts[projectName] || fs.existsSync(path.join(PROJECTS_DIR, projectName))) {
+        return { action: 'version', params: { project: projectName } };
+      }
+    }
+  }
+
   return null;
 }
 
@@ -247,6 +266,8 @@ function executeAction(action, params) {
       return executeClone(params.account, params.repo);
     case 'status':
       return executeStatus();
+    case 'version':
+      return executeVersion(params.project);
     default:
       return { success: false, response: `Unknown action: ${action}` };
   }
@@ -318,6 +339,58 @@ function executeStatus() {
 }
 
 /**
+ * Get version info for a project
+ */
+function executeVersion(projectName) {
+  const projectPath = path.join(PROJECTS_DIR, projectName);
+
+  if (!fs.existsSync(projectPath)) {
+    return { success: false, response: `Project "${projectName}" not found` };
+  }
+
+  let response = `📦 *${projectName}*\n\n`;
+
+  // Get version from package.json
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
+    response += `*Version:* ${pkg.version || 'unknown'}\n`;
+  } catch (e) {
+    response += '*Version:* No package.json\n';
+  }
+
+  // Get last commit
+  try {
+    const lastCommit = execSync('git log -1 --pretty=format:"%h %s (%ar)"', {
+      cwd: projectPath,
+      encoding: 'utf8'
+    });
+    response += `*Last commit:* ${lastCommit}\n`;
+  } catch (e) {
+    response += '*Last commit:* Unable to read\n';
+  }
+
+  // Get branch
+  try {
+    const branch = execSync('git branch --show-current', {
+      cwd: projectPath,
+      encoding: 'utf8'
+    }).trim();
+    response += `*Branch:* ${branch}\n`;
+  } catch (e) {}
+
+  // Check if clean
+  try {
+    const status = execSync('git status --porcelain', {
+      cwd: projectPath,
+      encoding: 'utf8'
+    }).trim();
+    response += status ? '*Status:* Has uncommitted changes' : '*Status:* Clean';
+  } catch (e) {}
+
+  return { success: true, response };
+}
+
+/**
  * Process a natural language message
  * Returns: { response: string, action?: 'task'|'status'|'chat', project?: string, task?: string }
  */
@@ -364,7 +437,7 @@ Respond helpfully and concisely.`;
 
   try {
     const response = await queryLLM(fullPrompt, {
-      timeout: 30000,
+      timeout: 120000,  // 2 minutes for complex queries
       workingDir: project ? (project.localPath || path.join(PROJECTS_DIR, project.name)) : '/root'
     });
 

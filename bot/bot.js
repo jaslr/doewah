@@ -299,13 +299,6 @@ async function handleNaturalLanguage(text) {
     return;
   }
 
-  // Only show "thinking" if this will actually call the LLM
-  // Quick actions (clone, status) don't need it
-  const isQuickAction = orchestrator.detectAction && orchestrator.detectAction(text);
-  if (!isQuickAction) {
-    sendMessage('🤔 Thinking...');
-  }
-
   try {
     const result = await orchestrator.processMessage(text);
 
