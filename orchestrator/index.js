@@ -375,6 +375,86 @@ async function executeSentryAllIssues(limit = 10) {
   }
 }
 
+/**
+ * Use LLM to interpret a potential Sentry query
+ * Handles voice-to-text mishearings like "century" -> "sentry", "liv in a" -> "livna"
+ */
+async function executeSentryWithLLM(message) {
+  try {
+    loadContexts();
+
+    // Build list of projects with Sentry configured
+    const sentryProjects = [];
+    const seen = new Set();
+    for (const [key, ctx] of Object.entries(projectContexts)) {
+      if (ctx.sentryProject && ctx.name && !seen.has(ctx.name)) {
+        seen.add(ctx.name);
+        sentryProjects.push({ name: ctx.name, slug: ctx.sentryProject });
+      }
+    }
+
+    if (sentryProjects.length === 0) {
+      return { success: false, response: 'No projects have Sentry monitoring configured.' };
+    }
+
+    // Ask LLM to interpret
+    const prompt = `You are interpreting a voice message that may contain speech-to-text errors.
+
+User said: "${message}"
+
+Projects with error monitoring:
+${sentryProjects.map(p => `- ${p.name}`).join('\n')}
+
+Common mishearings:
+- "century" often means "sentry" (error monitoring)
+- Project names may be phonetically similar but misspelled
+
+Is this a request about errors/issues/bugs for a specific project?
+
+Reply with ONLY one of these (no explanation):
+- The exact project name from the list above
+- "ALL" if asking about errors across all projects
+- "NO" if this is not about error monitoring at all`;
+
+    const llmResponse = await queryLLM(prompt, { timeout: 15000 });
+    const interpreted = llmResponse.trim().toUpperCase();
+
+    // Handle LLM response
+    if (interpreted === 'NO') {
+      // Not a Sentry query - let it fall through to normal processing
+      return { success: false, notSentry: true };
+    }
+
+    if (interpreted === 'ALL') {
+      return executeSentryAllIssues();
+    }
+
+    // Find the matching project
+    const matchedProject = sentryProjects.find(
+      p => p.name.toUpperCase() === interpreted
+    );
+
+    if (matchedProject) {
+      return executeSentryProjectIssues(matchedProject.slug);
+    }
+
+    // LLM gave an unexpected response - try fuzzy match
+    const fuzzyMatch = sentryProjects.find(
+      p => interpreted.includes(p.name.toUpperCase()) || p.name.toUpperCase().includes(interpreted)
+    );
+
+    if (fuzzyMatch) {
+      return executeSentryProjectIssues(fuzzyMatch.slug);
+    }
+
+    // Couldn't determine - query all
+    return executeSentryAllIssues();
+
+  } catch (e) {
+    return { success: false, response: `Failed to interpret query: ${e.message}` };
+  }
+}
+
 // Cache of loaded project contexts
 let projectContexts = {};
 let lastContextLoad = 0;
@@ -641,40 +721,12 @@ function detectAction(message) {
     }
   }
 
-  // Sentry queries - check if message mentions sentry/century AND a known project
-  // Note: "century" is a common voice-to-text mishearing of "sentry"
-  const isSentryQuery = msgLower.match(/sentry|century/) ||
-                        (msgLower.match(/error|issue/) && !msgLower.match(/deploy|fail/));
+  // Sentry queries - loose detection, let LLM interpret
+  // Catches: sentry, century (voice mishearing), error, issue, bug, broken
+  const mightBeSentryQuery = msgLower.match(/sentry|century|error|issue|bug|broken|what.*(wrong|happening)/);
 
-  if (isSentryQuery) {
-    loadContexts();
-
-    // Search for any project name or alias in the message
-    for (const [key, ctx] of Object.entries(projectContexts)) {
-      if (!ctx.sentryProject) continue;
-
-      // Check project name
-      if (msgLower.includes(key.toLowerCase())) {
-        return { action: 'sentry-project', params: { project: ctx.name || key, slug: ctx.sentryProject } };
-      }
-
-      // Check aliases (handles multi-word aliases like "liv in a")
-      if (ctx.aliases) {
-        for (const alias of ctx.aliases) {
-          if (msgLower.includes(alias.toLowerCase())) {
-            return { action: 'sentry-project', params: { project: ctx.name || key, slug: ctx.sentryProject } };
-          }
-        }
-      }
-    }
-
-    // No project found but still a sentry query - check all projects
-    if (msgLower.match(/(?:any|check|show|what)\s*(?:'s|is|are)?\s*(?:the\s+)?(?:sentry|century)/i) ||
-        msgLower.match(/(?:sentry|century)\s+(?:issues?|errors?|status)/i) ||
-        msgLower.includes('check sentry') ||
-        msgLower.includes('check century')) {
-      return { action: 'sentry-all', params: {} };
-    }
+  if (mightBeSentryQuery) {
+    return { action: 'sentry-llm-interpret', params: { message } };
   }
 
   return null;
@@ -703,6 +755,8 @@ async function executeAction(action, params) {
       return executeSentryProjectIssues(params.slug);
     case 'sentry-all':
       return executeSentryAllIssues();
+    case 'sentry-llm-interpret':
+      return executeSentryWithLLM(params.message);
     default:
       return { success: false, response: `Unknown action: ${action}` };
   }
@@ -833,10 +887,15 @@ async function processMessage(message) {
   // First, check for actionable commands
   const detected = detectAction(message);
   if (detected) {
-    return executeAction(detected.action, detected.params);
+    const result = await executeAction(detected.action, detected.params);
+    // If action succeeded OR failed with a real error, return it
+    // If notSentry flag is set, it means LLM determined this isn't a Sentry query - continue to normal processing
+    if (!result.notSentry) {
+      return result;
+    }
   }
 
-  // If no action detected, try to identify if this is about a specific project
+  // If no action detected (or LLM said not a Sentry query), try to identify if this is about a specific project
   const project = identifyProject(message);
 
   // Build context-aware prompt
