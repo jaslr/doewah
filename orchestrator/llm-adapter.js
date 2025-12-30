@@ -84,9 +84,10 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
       // Escape prompt for shell (use single quotes and escape internal single quotes)
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
-      // Use claude CLI with print mode (absolute path to avoid PATH issues)
+      // Run node with claude CLI script directly (avoids shebang PATH issues)
+      const claudeScript = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
       const result = execSync(
-        `/usr/bin/claude -p '${escapedPrompt}'`,
+        `node ${claudeScript} -p '${escapedPrompt}'`,
         {
           cwd: workingDir,
           timeout,
@@ -131,8 +132,9 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
       CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
     };
 
-    // Spawn claude CLI process for streaming (absolute path to avoid PATH issues)
-    const child = spawn('/usr/bin/claude', ['-p', prompt], {
+    // Spawn node with claude CLI script directly (avoids shebang PATH issues)
+    const claudeScript = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
+    const child = spawn('node', [claudeScript, '-p', prompt], {
       cwd: workingDir,
       env: cleanEnv,
     });
