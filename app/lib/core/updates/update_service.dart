@@ -157,7 +157,14 @@ class UpdateNotifier extends StateNotifier<UpdateState> {
 
       // Save to downloads directory
       final dir = await getExternalStorageDirectory();
-      final apkPath = '${dir!.path}/${state.updateInfo!.apkFile}';
+      if (dir == null || state.updateInfo == null) {
+        state = state.copyWith(
+          status: UpdateStatus.error,
+          errorMessage: 'Storage not available',
+        );
+        return;
+      }
+      final apkPath = '${dir.path}/${state.updateInfo!.apkFile}';
       final file = File(apkPath);
       await file.writeAsBytes(bytes);
 

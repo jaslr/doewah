@@ -22,18 +22,29 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
     super.initState();
     // Delay startup to let app initialize
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(seconds: 2), () {
-        if (!mounted) return;
-        try {
-          final wsService = ref.read(webSocketServiceProvider);
-          // Pass dev token for authentication
-          wsService.connect(AppConfig.wsUrl, authToken: 'dev-token');
-          showUpdateDialogIfAvailable(context, ref);
-        } catch (e) {
-          debugPrint('Startup error: $e');
-        }
-      });
+      if (!mounted) return;
+      _initializeServices();
     });
+  }
+
+  Future<void> _initializeServices() async {
+    // Short delay to let framework settle
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
+
+    try {
+      final wsService = ref.read(webSocketServiceProvider);
+      // Pass dev token for authentication
+      wsService.connect(AppConfig.wsUrl, authToken: 'dev-token');
+    } catch (e) {
+      debugPrint('WebSocket init error: $e');
+    }
+
+    try {
+      await showUpdateDialogIfAvailable(context, ref);
+    } catch (e) {
+      debugPrint('Update check error: $e');
+    }
   }
 
   @override
@@ -109,10 +120,13 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
           ),
         );
       },
-      loading: () => const SizedBox(
+      loading: () => Container(
         width: 8,
         height: 8,
-        child: CircularProgressIndicator(strokeWidth: 1),
+        decoration: const BoxDecoration(
+          color: Colors.orange,
+          shape: BoxShape.circle,
+        ),
       ),
       error: (_, __) => Container(
         width: 8,

@@ -52,10 +52,10 @@ class UpdateDialog extends ConsumerWidget {
             _buildLogo(),
             const SizedBox(height: 16),
             Text('Version ${state.updateInfo?.version} is available.'),
-            if (state.updateInfo?.changelog != null) ...[
+            if (state.updateInfo?.changelog != null && state.updateInfo!.changelog!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                state.updateInfo!.changelog!,
+                state.updateInfo?.changelog ?? '',
                 style: const TextStyle(color: Colors.grey),
               ),
             ],

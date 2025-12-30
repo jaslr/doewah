@@ -23,26 +23,15 @@ Future<void> logError(String error) async {
 }
 
 void main() {
-  runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized();
 
-    await logError('App starting...');
+  // Catch Flutter framework errors
+  FlutterError.onError = (details) {
+    logError('FlutterError: ${details.exception}\n${details.stack}');
+    // Don't crash - just log
+  };
 
-    // Catch Flutter framework errors
-    FlutterError.onError = (details) {
-      logError('FlutterError: ${details.exception}\n${details.stack}');
-      FlutterError.presentError(details);
-    };
-
-    await logError('Running app...');
-
-    runApp(const ProviderScope(child: DoewahApp()));
-
-  }, (error, stack) async {
-    await logError('ZoneError: $error\n$stack');
-    // Show error screen
-    runApp(ErrorApp(error: error.toString(), log: errorLog));
-  });
+  runApp(const ProviderScope(child: DoewahApp()));
 }
 
 class DoewahApp extends StatelessWidget {
@@ -65,68 +54,8 @@ class DoewahApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const SafeStartScreen(),
+      home: const ThreadsScreen(),
     );
-  }
-}
-
-// Safe wrapper that catches errors during widget build
-class SafeStartScreen extends StatefulWidget {
-  const SafeStartScreen({super.key});
-
-  @override
-  State<SafeStartScreen> createState() => _SafeStartScreenState();
-}
-
-class _SafeStartScreenState extends State<SafeStartScreen> {
-  bool _initialized = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _safeInit();
-  }
-
-  Future<void> _safeInit() async {
-    try {
-      await logError('SafeStartScreen initializing...');
-      // Small delay to let everything settle
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        await logError('SafeStartScreen ready, showing ThreadsScreen');
-        setState(() => _initialized = true);
-      }
-    } catch (e, stack) {
-      await logError('SafeStartScreen error: $e\n$stack');
-      if (mounted) {
-        setState(() => _error = e.toString());
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_error != null) {
-      return ErrorScreen(error: _error!, log: errorLog);
-    }
-
-    if (!_initialized) {
-      return const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Starting Doewah...', style: TextStyle(color: Colors.white)),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return const ThreadsScreen();
   }
 }
 
