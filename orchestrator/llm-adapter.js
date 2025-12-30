@@ -10,7 +10,7 @@
  * 2. Implement the provider's API call
  */
 
-const { execSync, spawn } = require('child_process');
+const { execSync, spawn, exec } = require('child_process');
 const https = require('https');
 const dns = require('dns');
 const fs = require('fs');
@@ -158,26 +158,23 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
       TERM: 'xterm-256color',
       CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
     };
-    console.log('[LLM-DEBUG] cleanEnv.PATH:', cleanEnv.PATH);
-    console.log('[LLM-DEBUG] Spawning:', nodeBin, claudeScript, '-p', prompt.substring(0, 50) + '...');
+    // Escape prompt for shell
+    const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
-    // Spawn node with claude CLI script directly (avoids shebang PATH issues)
-    const child = spawn(nodeBin, [claudeScript, '-p', prompt], {
-      cwd: workingDir,
-      env: cleanEnv,
-    });
-    console.log('[LLM-DEBUG] Spawn initiated, pid:', child.pid);
+    // Use exec with shell - more reliable than spawn for scripts
+    const cmd = `CLAUDE_CODE_OAUTH_TOKEN='${oauthToken.trim()}' claude -p '${escapedPrompt}'`;
+    console.log('[LLM-DEBUG] Executing via shell, cmd length:', cmd.length);
 
     let fullOutput = '';
     let timeoutId = null;
 
-    // Set timeout
-    if (timeout > 0) {
-      timeoutId = setTimeout(() => {
-        child.kill();
-        reject(new Error('Claude Code timeout'));
-      }, timeout);
-    }
+    const child = exec(cmd, {
+      cwd: workingDir,
+      maxBuffer: 10 * 1024 * 1024, // 10MB
+      timeout: timeout,
+    });
+
+    console.log('[LLM-DEBUG] Exec initiated, pid:', child.pid);
 
     child.stdout.on('data', (data) => {
       const chunk = data.toString();
@@ -187,13 +184,14 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
 
     child.stderr.on('data', (data) => {
       const text = data.toString();
-      // Parse step indicators from stderr
+      console.log('[LLM-DEBUG] stderr:', text.substring(0, 200));
       if (text.includes('Thinking') || text.includes('...')) {
         onStep(text.trim());
       }
     });
 
     child.on('close', (code) => {
+      console.log('[LLM-DEBUG] Process closed with code:', code);
       if (timeoutId) clearTimeout(timeoutId);
       if (code === 0) {
         resolve(fullOutput.trim());
@@ -203,8 +201,7 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
     });
 
     child.on('error', (error) => {
-      console.log('[LLM-DEBUG] Spawn error:', error.code, error.message);
-      console.log('[LLM-DEBUG] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      console.log('[LLM-DEBUG] Exec error:', error.code, error.message);
       if (timeoutId) clearTimeout(timeoutId);
       reject(new Error(`Claude Code error: ${error.message}`));
     });
