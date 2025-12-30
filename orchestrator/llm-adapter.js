@@ -160,52 +160,25 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
     };
     // Escape prompt for shell
     const escapedPrompt = prompt.replace(/'/g, "'\\''");
-
-    // Use exec with shell - more reliable than spawn for scripts
     const cmd = `CLAUDE_CODE_OAUTH_TOKEN='${oauthToken.trim()}' claude -p '${escapedPrompt}'`;
-    console.log('[LLM-DEBUG] Executing via shell, cmd length:', cmd.length);
+    console.log('[LLM-DEBUG] Executing via execSync, cmd length:', cmd.length);
 
-    let fullOutput = '';
-    let timeoutId = null;
-
-    // Token is already in the command string, don't pass env at all
-    const child = exec(cmd, {
-      cwd: workingDir,
-      maxBuffer: 10 * 1024 * 1024, // 10MB
-      timeout: timeout
-    });
-
-    console.log('[LLM-DEBUG] Exec initiated, pid:', child.pid);
-
-    child.stdout.on('data', (data) => {
-      const chunk = data.toString();
-      fullOutput += chunk;
-      onChunk(chunk);
-    });
-
-    child.stderr.on('data', (data) => {
-      const text = data.toString();
-      console.log('[LLM-DEBUG] stderr:', text.substring(0, 200));
-      if (text.includes('Thinking') || text.includes('...')) {
-        onStep(text.trim());
-      }
-    });
-
-    child.on('close', (code) => {
-      console.log('[LLM-DEBUG] Process closed with code:', code);
-      if (timeoutId) clearTimeout(timeoutId);
-      if (code === 0) {
-        resolve(fullOutput.trim());
-      } else {
-        reject(new Error(`Claude Code exited with code ${code}`));
-      }
-    });
-
-    child.on('error', (error) => {
-      console.log('[LLM-DEBUG] Exec error:', error.code, error.message);
-      if (timeoutId) clearTimeout(timeoutId);
+    // Use execSync since exec/spawn have mysterious ENOENT issues
+    // Run in try/catch and stream result
+    try {
+      const result = execSync(cmd, {
+        cwd: workingDir,
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: timeout,
+        encoding: 'utf8'
+      });
+      console.log('[LLM-DEBUG] execSync completed, result length:', result.length);
+      onChunk(result);
+      resolve(result.trim());
+    } catch (error) {
+      console.log('[LLM-DEBUG] execSync error:', error.message);
       reject(new Error(`Claude Code error: ${error.message}`));
-    });
+    }
   });
 }
 
