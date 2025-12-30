@@ -66,6 +66,17 @@ const server = http.createServer((req, res) => {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'No version info available' }));
     }
+  } else if (req.method === 'GET' && req.url === '/termux-key') {
+    // Serve base64-encoded SSH key for Termux setup
+    const keyPath = '/root/termux-key.b64';
+    if (fs.existsSync(keyPath)) {
+      const key = fs.readFileSync(keyPath, 'utf8');
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end(key);
+    } else {
+      res.writeHead(404);
+      res.end('Key not found');
+    }
   } else if (req.method === 'GET' && req.url === '/download') {
     // Serve the latest APK
     const versionFile = path.join(UPDATES_DIR, 'version.json');
