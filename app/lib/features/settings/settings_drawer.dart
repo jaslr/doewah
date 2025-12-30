@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../terminal/terminal_screen.dart';
+import '../terminal/termux_setup_screen.dart';
 
 /// Provider for package info
 final packageInfoProvider = FutureProvider<PackageInfo>((ref) async {
@@ -71,6 +72,20 @@ class SettingsDrawer extends ConsumerWidget {
                         context,
                         MaterialPageRoute(
                           builder: (context) => const TerminalScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _SettingsTile(
+                    icon: Icons.phone_android,
+                    title: 'Termux Setup',
+                    subtitle: 'SSH key & Claude alias',
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TermuxSetupScreen(),
                         ),
                       );
                     },
