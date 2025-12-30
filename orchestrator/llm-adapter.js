@@ -84,9 +84,9 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
       // Escape prompt for shell (use single quotes and escape internal single quotes)
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
-      // Use claude CLI with print mode
+      // Use claude CLI with print mode (absolute path to avoid PATH issues)
       const result = execSync(
-        `claude -p '${escapedPrompt}'`,
+        `/usr/bin/claude -p '${escapedPrompt}'`,
         {
           cwd: workingDir,
           timeout,
@@ -131,8 +131,8 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
       CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
     };
 
-    // Spawn claude CLI process for streaming
-    const child = spawn('claude', ['-p', prompt], {
+    // Spawn claude CLI process for streaming (absolute path to avoid PATH issues)
+    const child = spawn('/usr/bin/claude', ['-p', prompt], {
       cwd: workingDir,
       env: cleanEnv,
     });
