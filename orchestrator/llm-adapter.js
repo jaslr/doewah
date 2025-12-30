@@ -70,13 +70,10 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
         return;
       }
 
-      // Build a MINIMAL clean environment - don't inherit polluted process.env
-      // Only include what Claude absolutely needs
-      // Include common npm global paths where claude CLI might be installed
-      const npmPaths = '/root/.npm-global/bin:/root/.local/bin:/usr/local/lib/node_modules/.bin';
+      // Include both system paths and npm paths - node needs to be findable
       const cleanEnv = {
         HOME: '/root',
-        PATH: `${npmPaths}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
+        PATH: '/usr/local/bin:/usr/bin:/bin:/root/.npm-global/bin',
         TERM: 'xterm-256color',
         CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
       };
@@ -123,11 +120,10 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
       return;
     }
 
-    // Include common npm global paths where claude CLI might be installed
-    const npmPaths = '/root/.npm-global/bin:/root/.local/bin:/usr/local/lib/node_modules/.bin';
+    // Include both system paths and npm paths - node needs to be findable
     const cleanEnv = {
       HOME: '/root',
-      PATH: `${npmPaths}:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
+      PATH: '/usr/local/bin:/usr/bin:/bin:/root/.npm-global/bin',
       TERM: 'xterm-256color',
       CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
     };
