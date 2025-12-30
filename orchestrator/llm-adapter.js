@@ -79,7 +79,7 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
           cwd: workingDir,
           timeout,
           encoding: 'utf8',
-          shell: '/bin/bash'  // Explicitly use bash instead of /bin/sh
+          stdio: ['pipe', 'pipe', 'pipe']  // Explicit stdio pipes
         }
       );
       resolve(result.trim());
