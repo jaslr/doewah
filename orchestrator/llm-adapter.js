@@ -161,13 +161,16 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
     // Use execFileSync to bypass shell entirely
     console.log('[LLM-DEBUG] Executing via execFileSync with node directly');
 
+    // Set token in process.env directly before exec
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken.trim();
+
     try {
       const result = execFileSync('/usr/bin/node', [claudeScript, '-p', prompt], {
         cwd: workingDir,
         maxBuffer: 10 * 1024 * 1024,
         timeout: timeout,
-        encoding: 'utf8',
-        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim() }
+        encoding: 'utf8'
+        // No env option - inherit from process
       });
       console.log('[LLM-DEBUG] execFileSync completed, result length:', result.length);
       onChunk(result);
