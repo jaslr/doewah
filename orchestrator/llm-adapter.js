@@ -72,14 +72,14 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
       // Escape prompt for shell
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
-      // Set token in env and run claude directly (inherit full environment)
+      // Set token in env and run claude directly
       const result = execSync(
         `CLAUDE_CODE_OAUTH_TOKEN='${oauthToken.trim()}' claude -p '${escapedPrompt}'`,
         {
           cwd: workingDir,
           timeout,
-          encoding: 'utf8'
-          // No env option - inherit full parent environment
+          encoding: 'utf8',
+          shell: '/bin/bash'  // Explicitly use bash instead of /bin/sh
         }
       );
       resolve(result.trim());
