@@ -4,6 +4,7 @@ import '../../core/config.dart';
 import '../../core/websocket/websocket_service.dart';
 import '../../core/updates/update_service.dart';
 import '../../core/updates/update_dialog.dart';
+import '../settings/settings_drawer.dart';
 import 'threads_provider.dart';
 import 'chat_screen.dart';
 
@@ -18,17 +19,19 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
   @override
   void initState() {
     super.initState();
-    // Connect to WebSocket on startup
+    // Delay startup to let app initialize
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        final wsService = ref.read(webSocketServiceProvider);
-        wsService.connect(AppConfig.wsUrl);
-
-        // Check for updates (non-blocking)
-        showUpdateDialogIfAvailable(context, ref);
-      } catch (e) {
-        debugPrint('Startup error: $e');
-      }
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        try {
+          final wsService = ref.read(webSocketServiceProvider);
+          // Pass dev token for authentication
+          wsService.connect(AppConfig.wsUrl, authToken: 'dev-token');
+          showUpdateDialogIfAvailable(context, ref);
+        } catch (e) {
+          debugPrint('Startup error: $e');
+        }
+      });
     });
   }
 
@@ -47,14 +50,17 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              // TODO: Navigate to settings
-            },
+          Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () {
+                Scaffold.of(context).openEndDrawer();
+              },
+            ),
           ),
         ],
       ),
+      endDrawer: const SettingsDrawer(),
       body: threadsState.threads.isEmpty
           ? _buildEmptyState()
           : _buildThreadsList(threadsState.threads),
@@ -281,8 +287,8 @@ class _NewThreadSheet extends StatefulWidget {
 }
 
 class _NewThreadSheetState extends State<_NewThreadSheet> {
-  String? _selectedProject;
-  final _projects = ['General', 'Livna', 'Brontiq', 'ORCHON', 'Doewah'];
+  String? _selectedProject = 'Other';
+  final _projects = ['Other', 'Livna', 'Brontiq', 'ORCHON', 'Doewah'];
 
   @override
   Widget build(BuildContext context) {
@@ -304,8 +310,7 @@ class _NewThreadSheetState extends State<_NewThreadSheet> {
             spacing: 8,
             runSpacing: 8,
             children: _projects.map((project) {
-              final isSelected = _selectedProject == project ||
-                  (_selectedProject == null && project == 'General');
+              final isSelected = _selectedProject == project;
               return FilterChip(
                 label: Text(project),
                 selected: isSelected,
@@ -322,7 +327,7 @@ class _NewThreadSheetState extends State<_NewThreadSheet> {
             width: double.infinity,
             child: FilledButton(
               onPressed: () {
-                final hint = _selectedProject == 'General' ? null : _selectedProject?.toLowerCase();
+                final hint = _selectedProject == 'Other' ? null : _selectedProject?.toLowerCase();
                 widget.onCreateThread(hint);
               },
               child: const Text('Create Thread'),

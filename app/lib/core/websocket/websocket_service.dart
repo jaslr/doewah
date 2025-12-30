@@ -50,25 +50,32 @@ class WebSocketService {
 
   /// Connect to the WebSocket server
   Future<void> connect(String serverUrl, {String? authToken}) async {
+    print('[WS] connect() called with: $serverUrl');
+
     if (_state == WsConnectionState.connecting ||
         _state == WsConnectionState.connected) {
+      print('[WS] Already connecting/connected, skipping');
       return;
     }
 
     _serverUrl = serverUrl;
     _updateState(WsConnectionState.connecting);
+    print('[WS] Attempting connection...');
 
     try {
       _channel = WebSocketChannel.connect(Uri.parse(serverUrl));
 
       // Wait for connection
+      print('[WS] Waiting for channel ready...');
       await _channel!.ready;
 
+      print('[WS] Connected successfully!');
       _updateState(WsConnectionState.connected);
       _reconnectAttempts = 0;
 
       // Send auth if token provided
       if (authToken != null) {
+        print('[WS] Sending auth token...');
         send({'type': 'auth', 'token': authToken});
       }
 
@@ -79,6 +86,7 @@ class WebSocketService {
         onDone: _handleDisconnect,
       );
     } catch (e) {
+      print('[WS] Connection error: $e');
       _updateState(WsConnectionState.error);
       _scheduleReconnect();
     }
@@ -145,11 +153,12 @@ class WebSocketService {
 
   void _handleMessage(dynamic data) {
     try {
+      print('[WS] Received: $data');
       final json = jsonDecode(data as String) as Map<String, dynamic>;
       final message = ServerMessage.fromJson(json);
       _messageController.add(message);
     } catch (e) {
-      // Ignore malformed messages
+      print('[WS] Error parsing message: $e');
     }
   }
 
