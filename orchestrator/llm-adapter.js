@@ -10,7 +10,7 @@
  * 2. Implement the provider's API call
  */
 
-const { execSync, execFileSync } = require('child_process');
+const { execSync } = require('child_process');
 const https = require('https');
 const dns = require('dns');
 const fs = require('fs');
@@ -63,33 +63,23 @@ function getClaudeOAuthToken() {
 async function queryClaudeCode(prompt, { timeout, workingDir }) {
   return new Promise((resolve, reject) => {
     try {
-      // Get OAuth token fresh from credentials file (not from process.env)
       const oauthToken = getClaudeOAuthToken();
       if (!oauthToken) {
         reject(new Error('No Claude OAuth token found. Run: claude setup-token'));
         return;
       }
 
-      // Include both system paths and npm paths - node needs to be findable
-      const cleanEnv = {
-        HOME: '/root',
-        PATH: '/usr/local/bin:/usr/bin:/bin:/root/.npm-global/bin',
-        TERM: 'xterm-256color',
-        CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
-      };
-
-      // Escape prompt for shell (use single quotes and escape internal single quotes)
+      // Escape prompt for shell
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
-      // Run node with claude CLI script directly (avoids shebang PATH issues)
-      const claudeScript = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
+      // Set token in env and run claude directly (inherit full environment)
       const result = execSync(
-        `node ${claudeScript} -p '${escapedPrompt}'`,
+        `CLAUDE_CODE_OAUTH_TOKEN='${oauthToken.trim()}' claude -p '${escapedPrompt}'`,
         {
           cwd: workingDir,
           timeout,
-          encoding: 'utf8',
-          env: cleanEnv
+          encoding: 'utf8'
+          // No env option - inherit full parent environment
         }
       );
       resolve(result.trim());
@@ -101,9 +91,7 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
 
 /**
  * Query using Claude Code CLI with streaming output
- * @param {string} prompt - The prompt to send
- * @param {object} options - Options including callbacks
- * @returns {Promise<string>} - The full response when complete
+ * Uses same approach as queryClaudeCode - just returns the result via callbacks
  */
 async function queryClaudeCodeStreaming(prompt, options = {}) {
   const {
@@ -113,75 +101,10 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
     onStep = () => {},
   } = options;
 
-  return new Promise((resolve, reject) => {
-    // Debug: Check system state
-    console.log('[LLM-DEBUG] === Starting Claude Code streaming ===');
-    console.log('[LLM-DEBUG] process.env.PATH:', process.env.PATH);
-
-    // Find node and claude paths
-    try {
-      const nodePath = execSync('which node', { encoding: 'utf8' }).trim();
-      console.log('[LLM-DEBUG] which node:', nodePath);
-    } catch (e) {
-      console.log('[LLM-DEBUG] which node FAILED:', e.message);
-    }
-
-    try {
-      const claudePath = execSync('which claude', { encoding: 'utf8' }).trim();
-      console.log('[LLM-DEBUG] which claude:', claudePath);
-    } catch (e) {
-      console.log('[LLM-DEBUG] which claude FAILED:', e.message);
-    }
-
-    // Check if files exist
-    const claudeScript = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
-    console.log('[LLM-DEBUG] claudeScript exists:', fs.existsSync(claudeScript));
-    console.log('[LLM-DEBUG] /usr/bin/node exists:', fs.existsSync('/usr/bin/node'));
-    console.log('[LLM-DEBUG] /usr/local/bin/node exists:', fs.existsSync('/usr/local/bin/node'));
-
-    const oauthToken = getClaudeOAuthToken();
-    if (!oauthToken) {
-      reject(new Error('No Claude OAuth token found. Run: claude setup-token'));
-      return;
-    }
-    console.log('[LLM-DEBUG] OAuth token found: yes (length:', oauthToken.length, ')');
-
-    // Use absolute path for node
-    const nodeBin = fs.existsSync('/usr/bin/node') ? '/usr/bin/node' :
-                    fs.existsSync('/usr/local/bin/node') ? '/usr/local/bin/node' : 'node';
-    console.log('[LLM-DEBUG] Using node binary:', nodeBin);
-
-    // Include both system paths and npm paths
-    const cleanEnv = {
-      HOME: '/root',
-      PATH: '/usr/local/bin:/usr/bin:/bin:/root/.npm-global/bin',
-      TERM: 'xterm-256color',
-      CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
-    };
-    // Use execFileSync to bypass shell entirely
-    console.log('[LLM-DEBUG] Executing via execFileSync with node directly');
-
-    // Set token in process.env directly before exec
-    process.env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken.trim();
-
-    try {
-      const result = execFileSync('/usr/bin/node', [claudeScript, '-p', prompt], {
-        cwd: workingDir,
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: timeout,
-        encoding: 'utf8'
-        // No env option - inherit from process
-      });
-      console.log('[LLM-DEBUG] execFileSync completed, result length:', result.length);
-      onChunk(result);
-      resolve(result.trim());
-    } catch (error) {
-      console.log('[LLM-DEBUG] execFileSync error:', error.message);
-      console.log('[LLM-DEBUG] error.code:', error.code);
-      console.log('[LLM-DEBUG] error.errno:', error.errno);
-      reject(new Error(`Claude Code error: ${error.message}`));
-    }
-  });
+  // Use the same non-streaming function and return result via callback
+  const result = await queryClaudeCode(prompt, { timeout, workingDir });
+  onChunk(result);
+  return result;
 }
 
 /**
