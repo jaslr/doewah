@@ -10,7 +10,7 @@
  * 2. Implement the provider's API call
  */
 
-const { execSync, spawn, exec } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const https = require('https');
 const dns = require('dns');
 const fs = require('fs');
@@ -158,25 +158,25 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
       TERM: 'xterm-256color',
       CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
     };
-    // Escape prompt for shell
-    const escapedPrompt = prompt.replace(/'/g, "'\\''");
-    const cmd = `CLAUDE_CODE_OAUTH_TOKEN='${oauthToken.trim()}' claude -p '${escapedPrompt}'`;
-    console.log('[LLM-DEBUG] Executing via execSync, cmd length:', cmd.length);
+    // Use execFileSync to bypass shell entirely
+    const claudeScript = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
+    console.log('[LLM-DEBUG] Executing via execFileSync with node directly');
 
-    // Use execSync since exec/spawn have mysterious ENOENT issues
-    // Run in try/catch and stream result
     try {
-      const result = execSync(cmd, {
+      const result = execFileSync('/usr/bin/node', [claudeScript, '-p', prompt], {
         cwd: workingDir,
         maxBuffer: 10 * 1024 * 1024,
         timeout: timeout,
-        encoding: 'utf8'
+        encoding: 'utf8',
+        env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim() }
       });
-      console.log('[LLM-DEBUG] execSync completed, result length:', result.length);
+      console.log('[LLM-DEBUG] execFileSync completed, result length:', result.length);
       onChunk(result);
       resolve(result.trim());
     } catch (error) {
-      console.log('[LLM-DEBUG] execSync error:', error.message);
+      console.log('[LLM-DEBUG] execFileSync error:', error.message);
+      console.log('[LLM-DEBUG] error.code:', error.code);
+      console.log('[LLM-DEBUG] error.errno:', error.errno);
       reject(new Error(`Claude Code error: ${error.message}`));
     }
   });
