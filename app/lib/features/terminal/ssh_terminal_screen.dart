@@ -1,21 +1,30 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:xterm/xterm.dart';
 import 'package:http/http.dart' as http;
 import '../../core/config.dart';
+import '../settings/terminal_config_screen.dart';
 
-class SshTerminalScreen extends StatefulWidget {
+enum LaunchMode { bash, claude }
+
+class SshTerminalScreen extends ConsumerStatefulWidget {
   final String? initialCommand;
+  final LaunchMode launchMode;
 
-  const SshTerminalScreen({super.key, this.initialCommand});
+  const SshTerminalScreen({
+    super.key,
+    this.initialCommand,
+    this.launchMode = LaunchMode.bash,
+  });
 
   @override
-  State<SshTerminalScreen> createState() => _SshTerminalScreenState();
+  ConsumerState<SshTerminalScreen> createState() => _SshTerminalScreenState();
 }
 
-class _SshTerminalScreenState extends State<SshTerminalScreen> {
+class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
   final terminal = Terminal(maxLines: 10000);
   SSHClient? _client;
   SSHSession? _session;
@@ -34,20 +43,22 @@ class _SshTerminalScreenState extends State<SshTerminalScreen> {
       _error = null;
     });
 
+    final config = ref.read(terminalConfigProvider);
+
     try {
-      terminal.write('Connecting to ${AppConfig.dropletIp}...\r\n');
+      terminal.write('Connecting to ${config.dropletIp}...\r\n');
 
       // Get SSH key from server
-      terminal.write('Fetching SSH key...\r\n');
-      final keyResponse = await http.get(
-        Uri.parse('${AppConfig.updateUrl}/termux-key'),
-      );
+      terminal.write('Fetching SSH key from update server...\r\n');
+      final keyUrl = 'http://${config.dropletIp}:8406/termux-key';
+      final keyResponse = await http.get(Uri.parse(keyUrl));
 
       if (keyResponse.statusCode != 200) {
         throw Exception('Failed to fetch SSH key: ${keyResponse.statusCode}');
       }
 
-      // Strip newlines from base64 before decoding
+      // Strip whitespace from base64 before decoding
+      terminal.write('Decoding SSH key...\r\n');
       final keyB64 = keyResponse.body.replaceAll(RegExp(r'\s'), '');
       final keyBytes = base64Decode(keyB64);
       final keyString = utf8.decode(keyBytes);
@@ -55,11 +66,11 @@ class _SshTerminalScreenState extends State<SshTerminalScreen> {
       terminal.write('Establishing SSH connection...\r\n');
 
       // Connect via SSH
-      final socket = await SSHSocket.connect(AppConfig.dropletIp, 22);
+      final socket = await SSHSocket.connect(config.dropletIp, 22);
 
       _client = SSHClient(
         socket,
-        username: 'root',
+        username: config.sshUser,
         identities: [
           ...SSHKeyPair.fromPem(keyString),
         ],
@@ -101,10 +112,14 @@ class _SshTerminalScreenState extends State<SshTerminalScreen> {
         _isConnecting = false;
       });
 
-      // Execute initial command if provided
+      // Execute command based on launch mode
+      await Future.delayed(const Duration(milliseconds: 800));
+
       if (widget.initialCommand != null) {
-        await Future.delayed(const Duration(milliseconds: 500));
         _session?.write(Uint8List.fromList('${widget.initialCommand}\n'.codeUnits));
+      } else if (widget.launchMode == LaunchMode.claude) {
+        terminal.write('[Launching Claude...]\r\n');
+        _session?.write(Uint8List.fromList('${config.claudeCommand}\n'.codeUnits));
       }
     } catch (e) {
       terminal.write('\r\n[Error: $e]\r\n');
@@ -124,12 +139,21 @@ class _SshTerminalScreenState extends State<SshTerminalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final modeName = widget.launchMode == LaunchMode.claude ? 'Claude' : 'Terminal';
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('Terminal'),
+            Icon(
+              widget.launchMode == LaunchMode.claude
+                ? Icons.smart_toy
+                : Icons.terminal,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(modeName),
             if (_isConnecting) ...[
               const SizedBox(width: 8),
               const SizedBox(
