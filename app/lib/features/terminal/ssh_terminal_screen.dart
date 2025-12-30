@@ -47,7 +47,9 @@ class _SshTerminalScreenState extends State<SshTerminalScreen> {
         throw Exception('Failed to fetch SSH key: ${keyResponse.statusCode}');
       }
 
-      final keyBytes = base64Decode(keyResponse.body.trim());
+      // Strip newlines from base64 before decoding
+      final keyB64 = keyResponse.body.replaceAll(RegExp(r'\s'), '');
+      final keyBytes = base64Decode(keyB64);
       final keyString = utf8.decode(keyBytes);
 
       terminal.write('Establishing SSH connection...\r\n');
