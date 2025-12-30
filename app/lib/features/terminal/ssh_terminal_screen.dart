@@ -26,10 +26,13 @@ class SshTerminalScreen extends ConsumerStatefulWidget {
 
 class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
   final terminal = Terminal(maxLines: 10000);
+  final _inputController = TextEditingController();
+  final _inputFocusNode = FocusNode();
   SSHClient? _client;
   SSHSession? _session;
   bool _isConnecting = true;
   String? _error;
+  bool _useVoiceInput = false;
 
   @override
   void initState() {
@@ -132,9 +135,18 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
 
   @override
   void dispose() {
+    _inputController.dispose();
+    _inputFocusNode.dispose();
     _session?.close();
     _client?.close();
     super.dispose();
+  }
+
+  void _sendInput(String text) {
+    if (_session != null && text.isNotEmpty) {
+      _session!.write(Uint8List.fromList('$text\n'.codeUnits));
+      _inputController.clear();
+    }
   }
 
   @override
@@ -166,6 +178,22 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
         ),
         backgroundColor: Colors.black,
         actions: [
+          // Voice input toggle
+          IconButton(
+            icon: Icon(
+              _useVoiceInput ? Icons.keyboard : Icons.mic,
+              color: _useVoiceInput ? const Color(0xFF6366F1) : null,
+            ),
+            onPressed: () {
+              setState(() {
+                _useVoiceInput = !_useVoiceInput;
+              });
+              if (_useVoiceInput) {
+                _inputFocusNode.requestFocus();
+              }
+            },
+            tooltip: _useVoiceInput ? 'Use keyboard input' : 'Use voice input',
+          ),
           if (_error != null)
             IconButton(
               icon: const Icon(Icons.refresh),
@@ -175,12 +203,76 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
         ],
       ),
       body: SafeArea(
-        child: TerminalView(
-          terminal,
-          textStyle: const TerminalStyle(
-            fontSize: 14,
-            fontFamily: 'monospace',
-          ),
+        child: Column(
+          children: [
+            // Terminal view
+            Expanded(
+              child: GestureDetector(
+                onTap: _useVoiceInput
+                    ? () => _inputFocusNode.requestFocus()
+                    : null,
+                child: TerminalView(
+                  terminal,
+                  readOnly: _useVoiceInput,
+                  textStyle: const TerminalStyle(
+                    fontSize: 14,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ),
+            // Voice input field (when enabled)
+            if (_useVoiceInput)
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A2E),
+                  border: Border(
+                    top: BorderSide(color: Colors.grey[800]!),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _inputController,
+                        focusNode: _inputFocusNode,
+                        autofocus: true,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'monospace',
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Speak or type your message...',
+                          hintStyle: TextStyle(color: Colors.grey[600]),
+                          filled: true,
+                          fillColor: Colors.black,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.mic,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: _sendInput,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.send, color: Color(0xFF6366F1)),
+                      onPressed: () => _sendInput(_inputController.text),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ),
       ),
     );
