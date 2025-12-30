@@ -168,13 +168,11 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
     let fullOutput = '';
     let timeoutId = null;
 
-    // Don't pass custom env - inherit parent environment
-    // The OAuth token is set inline in the command
+    // Token is already in the command string, don't pass env at all
     const child = exec(cmd, {
       cwd: workingDir,
       maxBuffer: 10 * 1024 * 1024, // 10MB
-      timeout: timeout,
-      env: { ...process.env, CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim() }
+      timeout: timeout
     });
 
     console.log('[LLM-DEBUG] Exec initiated, pid:', child.pid);
