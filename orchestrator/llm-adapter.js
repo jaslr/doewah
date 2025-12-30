@@ -114,26 +114,59 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
   } = options;
 
   return new Promise((resolve, reject) => {
+    // Debug: Check system state
+    console.log('[LLM-DEBUG] === Starting Claude Code streaming ===');
+    console.log('[LLM-DEBUG] process.env.PATH:', process.env.PATH);
+
+    // Find node and claude paths
+    try {
+      const nodePath = execSync('which node', { encoding: 'utf8' }).trim();
+      console.log('[LLM-DEBUG] which node:', nodePath);
+    } catch (e) {
+      console.log('[LLM-DEBUG] which node FAILED:', e.message);
+    }
+
+    try {
+      const claudePath = execSync('which claude', { encoding: 'utf8' }).trim();
+      console.log('[LLM-DEBUG] which claude:', claudePath);
+    } catch (e) {
+      console.log('[LLM-DEBUG] which claude FAILED:', e.message);
+    }
+
+    // Check if files exist
+    const claudeScript = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
+    console.log('[LLM-DEBUG] claudeScript exists:', fs.existsSync(claudeScript));
+    console.log('[LLM-DEBUG] /usr/bin/node exists:', fs.existsSync('/usr/bin/node'));
+    console.log('[LLM-DEBUG] /usr/local/bin/node exists:', fs.existsSync('/usr/local/bin/node'));
+
     const oauthToken = getClaudeOAuthToken();
     if (!oauthToken) {
       reject(new Error('No Claude OAuth token found. Run: claude setup-token'));
       return;
     }
+    console.log('[LLM-DEBUG] OAuth token found: yes (length:', oauthToken.length, ')');
 
-    // Include both system paths and npm paths - node needs to be findable
+    // Use absolute path for node
+    const nodeBin = fs.existsSync('/usr/bin/node') ? '/usr/bin/node' :
+                    fs.existsSync('/usr/local/bin/node') ? '/usr/local/bin/node' : 'node';
+    console.log('[LLM-DEBUG] Using node binary:', nodeBin);
+
+    // Include both system paths and npm paths
     const cleanEnv = {
       HOME: '/root',
       PATH: '/usr/local/bin:/usr/bin:/bin:/root/.npm-global/bin',
       TERM: 'xterm-256color',
       CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
     };
+    console.log('[LLM-DEBUG] cleanEnv.PATH:', cleanEnv.PATH);
+    console.log('[LLM-DEBUG] Spawning:', nodeBin, claudeScript, '-p', prompt.substring(0, 50) + '...');
 
     // Spawn node with claude CLI script directly (avoids shebang PATH issues)
-    const claudeScript = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
-    const child = spawn('node', [claudeScript, '-p', prompt], {
+    const child = spawn(nodeBin, [claudeScript, '-p', prompt], {
       cwd: workingDir,
       env: cleanEnv,
     });
+    console.log('[LLM-DEBUG] Spawn initiated, pid:', child.pid);
 
     let fullOutput = '';
     let timeoutId = null;
@@ -170,6 +203,8 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
     });
 
     child.on('error', (error) => {
+      console.log('[LLM-DEBUG] Spawn error:', error.code, error.message);
+      console.log('[LLM-DEBUG] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       if (timeoutId) clearTimeout(timeoutId);
       reject(new Error(`Claude Code error: ${error.message}`));
     });
