@@ -6,7 +6,19 @@
   "scripts": {
     "start": "node bot/bot.js",
     "ws": "node ws/server.js",
-    "all": "node bot/bot.js & node ws/server.js"
+    "all": "node bot/bot.js & node ws/server.js",
+
+    "app:build": "cd app && $HOME/flutter/bin/flutter build apk --release",
+    "app:build:debug": "cd app && $HOME/flutter/bin/flutter build apk --debug",
+    "app:publish": "./scripts/publish-release.sh release",
+    "app:publish:debug": "./scripts/publish-release.sh debug",
+    "app:ship": "npm run app:build && npm run app:publish",
+    "app:version": "grep 'version:' app/pubspec.yaml",
+
+    "droplet:ssh": "source .env && ssh -i $DROPLET_SSH_KEY root@$DROPLET_IP",
+    "droplet:deploy": "source .env && ssh -i $DROPLET_SSH_KEY root@$DROPLET_IP 'cd /root/doewah && git pull && systemctl restart claude-bot && systemctl restart doewah-updates'",
+    "droplet:logs": "source .env && ssh -i $DROPLET_SSH_KEY root@$DROPLET_IP 'journalctl -u doewah-updates -f'",
+    "droplet:status": "source .env && ssh -i $DROPLET_SSH_KEY root@$DROPLET_IP 'systemctl status claude-bot doewah-updates'"
   },
   "dependencies": {
     "ws": "^8.18.0",

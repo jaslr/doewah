@@ -142,6 +142,60 @@
       "dependsOn": ["Build: Debug APK (Production)", "Deploy: Full (Pull + Restart WS + Updates)", "Publish: Upload APK to Update Server"],
       "dependsOrder": "sequence",
       "problemMatcher": []
+    },
+    {
+      "label": "App: Build Release APK",
+      "type": "shell",
+      "command": "npm run app:build",
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "App: Build & Ship (Full Release)",
+      "type": "shell",
+      "command": "npm run app:ship",
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Droplet: SSH",
+      "type": "shell",
+      "command": "npm run droplet:ssh",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true
+    },
+    {
+      "label": "Droplet: Deploy & Restart Services",
+      "type": "shell",
+      "command": "npm run droplet:deploy",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Droplet: View Update Server Logs",
+      "type": "shell",
+      "command": "npm run droplet:logs",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true
     }
   ]
 }
