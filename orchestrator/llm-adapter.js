@@ -159,7 +159,6 @@ async function queryClaudeCodeStreaming(prompt, options = {}) {
       CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim()
     };
     // Use execFileSync to bypass shell entirely
-    const claudeScript = '/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js';
     console.log('[LLM-DEBUG] Executing via execFileSync with node directly');
 
     try {
