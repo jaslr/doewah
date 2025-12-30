@@ -5,6 +5,7 @@ import '../../core/websocket/websocket_service.dart';
 import '../../core/updates/update_service.dart';
 import '../../core/updates/update_dialog.dart';
 import '../settings/settings_drawer.dart';
+import '../terminal/quick_commands.dart';
 import 'threads_provider.dart';
 import 'chat_screen.dart';
 
@@ -50,6 +51,11 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bolt),
+            tooltip: 'Quick Commands',
+            onPressed: () => showQuickCommands(context),
+          ),
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.settings),

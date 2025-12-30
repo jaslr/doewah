@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'update_service.dart';
 
 class UpdateDialog extends ConsumerWidget {
@@ -31,13 +32,25 @@ class UpdateDialog extends ConsumerWidget {
     }
   }
 
+  Widget _buildLogo() {
+    return Center(
+      child: SvgPicture.asset(
+        'assets/icon.svg',
+        width: 80,
+        height: 80,
+      ),
+    );
+  }
+
   Widget _buildContent(UpdateState state) {
     switch (state.status) {
       case UpdateStatus.available:
         return Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            _buildLogo(),
+            const SizedBox(height: 16),
             Text('Version ${state.updateInfo?.version} is available.'),
             if (state.updateInfo?.changelog != null) ...[
               const SizedBox(height: 8),
@@ -53,6 +66,8 @@ class UpdateDialog extends ConsumerWidget {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            _buildLogo(),
+            const SizedBox(height: 16),
             LinearProgressIndicator(value: state.downloadProgress),
             const SizedBox(height: 8),
             Text('${(state.downloadProgress * 100).toStringAsFixed(0)}%'),
@@ -60,12 +75,26 @@ class UpdateDialog extends ConsumerWidget {
         );
 
       case UpdateStatus.readyToInstall:
-        return const Text('Tap Install to complete the update.');
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildLogo(),
+            const SizedBox(height: 16),
+            const Text('Tap Install to complete the update.'),
+          ],
+        );
 
       case UpdateStatus.error:
-        return Text(
-          state.errorMessage ?? 'An error occurred',
-          style: const TextStyle(color: Colors.red),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildLogo(),
+            const SizedBox(height: 16),
+            Text(
+              state.errorMessage ?? 'An error occurred',
+              style: const TextStyle(color: Colors.red),
+            ),
+          ],
         );
 
       default:

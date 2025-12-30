@@ -17,6 +17,11 @@ class AppConfig {
     defaultValue: 'http://$dropletIp:8406',
   );
 
+  /// ttyd web terminal URL
+  static const String ttydUrl = 'http://$dropletIp:7681';
+  static const String ttydUser = 'user';
+  static const String ttydPassword = 'bed607b53defc89cd73b30aca44247c9';
+
   /// Current app version (injected at build time)
   static const String appVersion = String.fromEnvironment(
     'APP_VERSION',

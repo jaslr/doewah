@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../terminal/terminal_screen.dart';
 
 /// Provider for package info
 final packageInfoProvider = FutureProvider<PackageInfo>((ref) async {
@@ -60,6 +61,21 @@ class SettingsDrawer extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
+                  _SettingsTile(
+                    icon: Icons.terminal,
+                    title: 'Terminal',
+                    subtitle: 'Open droplet shell',
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TerminalScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(color: Colors.grey, height: 32),
                   _SettingsTile(
                     icon: Icons.wifi,
                     title: 'Connection',
