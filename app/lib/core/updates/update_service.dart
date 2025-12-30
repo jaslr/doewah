@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../config.dart';
 
 class UpdateInfo {
@@ -83,6 +83,10 @@ class UpdateNotifier extends StateNotifier<UpdateState> {
     state = state.copyWith(status: UpdateStatus.checking);
 
     try {
+      // Get actual installed version
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = packageInfo.version;
+
       final response = await http.get(
         Uri.parse('${AppConfig.updateUrl}/version'),
       );
@@ -90,8 +94,8 @@ class UpdateNotifier extends StateNotifier<UpdateState> {
       if (response.statusCode == 200) {
         final updateInfo = UpdateInfo.fromJson(jsonDecode(response.body));
 
-        // Compare versions
-        if (_isNewerVersion(updateInfo.version, AppConfig.appVersion)) {
+        // Compare versions using actual installed version
+        if (_isNewerVersion(updateInfo.version, currentVersion)) {
           state = state.copyWith(
             status: UpdateStatus.available,
             updateInfo: updateInfo,
