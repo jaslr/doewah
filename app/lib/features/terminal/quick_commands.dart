@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'terminal_screen.dart';
+import 'ssh_terminal_screen.dart';
 
 class QuickCommand {
   final String name;
@@ -120,7 +120,7 @@ class QuickCommandsSheet extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => TerminalScreen(
+                        builder: (context) => SshTerminalScreen(
                           initialCommand: cmd.command,
                         ),
                       ),

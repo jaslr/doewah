@@ -1,7 +1,7 @@
 name: doewah
 description: "Mobile DevOps control plane - manage projects, deployments, and infrastructure."
 publish_to: 'none'
-version: 0.2.4+15
+version: 0.2.5+16
 
 environment:
   sdk: ^3.6.0
@@ -35,8 +35,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_svg: ^2.0.10+1
 
-  # Web terminal
-  webview_flutter: ^4.10.0
+  # SSH terminal
+  dartssh2: ^2.9.0
+  xterm: ^4.0.0
 
   # App info
   package_info_plus: ^8.0.0
