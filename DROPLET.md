@@ -28,14 +28,17 @@ source .env && ssh -i $DROPLET_SSH_KEY root@$DROPLET_IP
 # View status
 systemctl status claude-bot        # Telegram bot
 systemctl status doewah-updates    # Update server (port 8406)
+systemctl status doewah-ws         # WebSocket server (port 8405)
 
 # Restart services
 systemctl restart claude-bot
 systemctl restart doewah-updates
+systemctl restart doewah-ws
 
 # View logs
 journalctl -u claude-bot -f
 journalctl -u doewah-updates -f
+journalctl -u doewah-ws -f
 ```
 
 ### Directory Structure on Droplet
@@ -188,6 +191,45 @@ DROPLET_IP="209.38.85.244"
 DROPLET_SSH_KEY="$HOME/.ssh/id_jaslr"
 WS_PORT="8405"
 UPDATES_PORT="8406"
+```
+
+## Threads and Project Directories
+
+When you create a thread in the app, you can select a project. This sets the working directory for Claude:
+
+| Project Selection | Working Directory |
+|-------------------|-------------------|
+| Livna | `/root/projects/livna` |
+| Brontiq | `/root/projects/brontiq` |
+| ORCHON | `/root/projects/orchon` |
+| Doewah | `/root/projects/doewah` |
+| Other (no selection) | `/root` |
+
+The orchestrator uses project context files in `/root/doewah/contexts/*.md` to understand each project.
+
+### Adding a New Project
+
+```bash
+# On the droplet:
+# 1. Clone the repo
+cd /root/projects
+git clone git@github.com:jaslr/your-repo.git
+
+# 2. Create a context file (optional but helpful)
+cat > /root/doewah/contexts/your-repo.md << 'EOF'
+## Description
+What this project does
+
+## Aliases
+- repo
+- your-repo
+
+## Deploy
+**Platform**: Fly.io / Vercel / etc.
+EOF
+
+# 3. Restart WS server to reload contexts
+systemctl restart doewah-ws
 ```
 
 ## Architecture Diagram

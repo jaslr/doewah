@@ -5,6 +5,7 @@ import '../../core/websocket/websocket_service.dart';
 import '../../core/updates/update_service.dart';
 import '../../core/updates/update_dialog.dart';
 import '../settings/settings_drawer.dart';
+import '../settings/terminal_config_screen.dart';
 import '../terminal/quick_commands.dart';
 import 'threads_provider.dart';
 import 'chat_screen.dart';
@@ -297,21 +298,23 @@ class _ThreadCard extends StatelessWidget {
   }
 }
 
-class _NewThreadSheet extends StatefulWidget {
+class _NewThreadSheet extends ConsumerStatefulWidget {
   final Function(String?) onCreateThread;
 
   const _NewThreadSheet({required this.onCreateThread});
 
   @override
-  State<_NewThreadSheet> createState() => _NewThreadSheetState();
+  ConsumerState<_NewThreadSheet> createState() => _NewThreadSheetState();
 }
 
-class _NewThreadSheetState extends State<_NewThreadSheet> {
-  String? _selectedProject = 'Other';
-  final _projects = ['Other', 'Livna', 'Brontiq', 'ORCHON', 'Doewah'];
+class _NewThreadSheetState extends ConsumerState<_NewThreadSheet> {
+  String? _selectedProject;
 
   @override
   Widget build(BuildContext context) {
+    final config = ref.watch(terminalConfigProvider);
+    final projectNames = ['General', ...config.projects.map((p) => p.name)];
+
     return Container(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -325,11 +328,19 @@ class _NewThreadSheetState extends State<_NewThreadSheet> {
               fontWeight: FontWeight.bold,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Select a project to set the working directory',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[400],
+            ),
+          ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _projects.map((project) {
+            children: projectNames.map((project) {
               final isSelected = _selectedProject == project;
               return FilterChip(
                 label: Text(project),
@@ -347,7 +358,9 @@ class _NewThreadSheetState extends State<_NewThreadSheet> {
             width: double.infinity,
             child: FilledButton(
               onPressed: () {
-                final hint = _selectedProject == 'Other' ? null : _selectedProject?.toLowerCase();
+                final hint = (_selectedProject == null || _selectedProject == 'General')
+                    ? null
+                    : _selectedProject?.toLowerCase();
                 widget.onCreateThread(hint);
               },
               child: const Text('Create Thread'),

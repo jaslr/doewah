@@ -8,24 +8,40 @@ class TerminalConfig {
   final String dropletIp;
   final String sshUser;
   final String claudeCommand;
+  final List<ProjectConfig> projects;
 
   const TerminalConfig({
     this.dropletIp = '209.38.85.244',
     this.sshUser = 'root',
     this.claudeCommand = 'IS_SANDBOX=1 claude --dangerously-skip-permissions',
+    this.projects = const [
+      ProjectConfig(name: 'Livna', directory: '/root/projects/livna'),
+      ProjectConfig(name: 'Brontiq', directory: '/root/projects/brontiq'),
+      ProjectConfig(name: 'ORCHON', directory: '/root/projects/orchon'),
+      ProjectConfig(name: 'Doewah', directory: '/root/doewah'),
+    ],
   });
 
   TerminalConfig copyWith({
     String? dropletIp,
     String? sshUser,
     String? claudeCommand,
+    List<ProjectConfig>? projects,
   }) {
     return TerminalConfig(
       dropletIp: dropletIp ?? this.dropletIp,
       sshUser: sshUser ?? this.sshUser,
       claudeCommand: claudeCommand ?? this.claudeCommand,
+      projects: projects ?? this.projects,
     );
   }
+}
+
+class ProjectConfig {
+  final String name;
+  final String directory;
+
+  const ProjectConfig({required this.name, required this.directory});
 }
 
 final terminalConfigProvider = StateProvider<TerminalConfig>((ref) {
