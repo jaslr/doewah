@@ -80,7 +80,9 @@ const server = http.createServer((req, res) => {
   } else if (req.method === 'GET' && req.url === '/download') {
     // Serve the latest APK
     const versionFile = path.join(UPDATES_DIR, 'version.json');
+    console.log('Download requested, checking:', versionFile);
     if (!fs.existsSync(versionFile)) {
+      console.log('version.json not found');
       res.writeHead(404);
       res.end('No release available');
       return;
@@ -88,8 +90,10 @@ const server = http.createServer((req, res) => {
 
     const version = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
     const apkPath = path.join(UPDATES_DIR, version.apkFile);
+    console.log('APK path:', apkPath, 'exists:', fs.existsSync(apkPath));
 
     if (!fs.existsSync(apkPath)) {
+      console.log('APK file not found:', apkPath);
       res.writeHead(404);
       res.end('APK not found');
       return;
