@@ -1,7 +1,23 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// Project configuration
+class ProjectConfig {
+  final String name;
+  final String directory;
+
+  const ProjectConfig({required this.name, required this.directory});
+
+  Map<String, dynamic> toJson() => {'name': name, 'directory': directory};
+
+  factory ProjectConfig.fromJson(Map<String, dynamic> json) => ProjectConfig(
+    name: json['name'] as String,
+    directory: json['directory'] as String,
+  );
+}
 
 // Terminal config state
 class TerminalConfig {
@@ -14,15 +30,18 @@ class TerminalConfig {
     this.dropletIp = '209.38.85.244',
     this.sshUser = 'root',
     this.claudeCommand = 'IS_SANDBOX=1 claude --dangerously-skip-permissions',
-    this.projects = const [
-      ProjectConfig(name: 'Livna', directory: '/root/projects/livna'),
-      ProjectConfig(name: 'Brontiq', directory: '/root/projects/brontiq'),
-      ProjectConfig(name: 'ORCHON', directory: '/root/projects/orchon'),
-      ProjectConfig(name: 'LittleListOfLights', directory: '/root/projects/littlelistoflights'),
-      ProjectConfig(name: 'Doewah', directory: '/root/doewah'),
-      ProjectConfig(name: 'Agent Deck', directory: '/root/agent-deck'),
-    ],
+    this.projects = const [],
   });
+
+  // Sensible defaults
+  static const List<ProjectConfig> defaultProjects = [
+    ProjectConfig(name: 'Livna', directory: '/root/projects/livna'),
+    ProjectConfig(name: 'Brontiq', directory: '/root/projects/brontiq'),
+    ProjectConfig(name: 'ORCHON', directory: '/root/projects/orchon'),
+    ProjectConfig(name: 'LittleListOfLights', directory: '/root/projects/littlelistoflights'),
+    ProjectConfig(name: 'Doewah', directory: '/root/doewah'),
+    ProjectConfig(name: 'Agent Deck', directory: '/root/agent-deck'),
+  ];
 
   TerminalConfig copyWith({
     String? dropletIp,
@@ -37,18 +56,94 @@ class TerminalConfig {
       projects: projects ?? this.projects,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'dropletIp': dropletIp,
+    'sshUser': sshUser,
+    'claudeCommand': claudeCommand,
+    'projects': projects.map((p) => p.toJson()).toList(),
+  };
+
+  factory TerminalConfig.fromJson(Map<String, dynamic> json) => TerminalConfig(
+    dropletIp: json['dropletIp'] as String? ?? '209.38.85.244',
+    sshUser: json['sshUser'] as String? ?? 'root',
+    claudeCommand: json['claudeCommand'] as String? ?? 'IS_SANDBOX=1 claude --dangerously-skip-permissions',
+    projects: (json['projects'] as List<dynamic>?)
+        ?.map((p) => ProjectConfig.fromJson(p as Map<String, dynamic>))
+        .toList() ?? TerminalConfig.defaultProjects,
+  );
 }
 
-class ProjectConfig {
-  final String name;
-  final String directory;
+// Notifier with persistence
+class TerminalConfigNotifier extends Notifier<TerminalConfig> {
+  static const _storageKey = 'terminal_config';
 
-  const ProjectConfig({required this.name, required this.directory});
+  @override
+  TerminalConfig build() {
+    _loadFromStorage();
+    // Return defaults with projects, will be updated when storage loads
+    return TerminalConfig(projects: TerminalConfig.defaultProjects);
+  }
+
+  Future<void> _loadFromStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_storageKey);
+    if (jsonStr != null) {
+      try {
+        final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+        state = TerminalConfig.fromJson(json);
+      } catch (e) {
+        debugPrint('Failed to load config: $e');
+      }
+    }
+  }
+
+  Future<void> _saveToStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_storageKey, jsonEncode(state.toJson()));
+  }
+
+  void updateConfig({
+    String? dropletIp,
+    String? sshUser,
+    String? claudeCommand,
+  }) {
+    state = state.copyWith(
+      dropletIp: dropletIp,
+      sshUser: sshUser,
+      claudeCommand: claudeCommand,
+    );
+    _saveToStorage();
+  }
+
+  void addProject(ProjectConfig project) {
+    state = state.copyWith(projects: [...state.projects, project]);
+    _saveToStorage();
+  }
+
+  void updateProject(int index, ProjectConfig project) {
+    final updated = [...state.projects];
+    updated[index] = project;
+    state = state.copyWith(projects: updated);
+    _saveToStorage();
+  }
+
+  void removeProject(int index) {
+    final updated = [...state.projects];
+    updated.removeAt(index);
+    state = state.copyWith(projects: updated);
+    _saveToStorage();
+  }
+
+  void resetToDefaults() {
+    state = TerminalConfig(projects: TerminalConfig.defaultProjects);
+    _saveToStorage();
+  }
 }
 
-final terminalConfigProvider = StateProvider<TerminalConfig>((ref) {
-  return const TerminalConfig();
-});
+final terminalConfigProvider = NotifierProvider<TerminalConfigNotifier, TerminalConfig>(
+  TerminalConfigNotifier.new,
+);
 
 class TerminalConfigScreen extends ConsumerStatefulWidget {
   const TerminalConfigScreen({super.key});
@@ -80,7 +175,7 @@ class _TerminalConfigScreenState extends ConsumerState<TerminalConfigScreen> {
   }
 
   void _saveConfig() {
-    ref.read(terminalConfigProvider.notifier).state = TerminalConfig(
+    ref.read(terminalConfigProvider.notifier).updateConfig(
       dropletIp: _ipController.text,
       sshUser: _userController.text,
       claudeCommand: _claudeController.text,
@@ -90,12 +185,129 @@ class _TerminalConfigScreenState extends ConsumerState<TerminalConfigScreen> {
     );
   }
 
+  void _showAddProjectDialog() {
+    final nameController = TextEditingController();
+    final dirController = TextEditingController(text: '/root/projects/');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Project'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Project Name',
+                hintText: 'My Project',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: dirController,
+              decoration: const InputDecoration(
+                labelText: 'Directory',
+                hintText: '/root/projects/myproject',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty && dirController.text.isNotEmpty) {
+                ref.read(terminalConfigProvider.notifier).addProject(
+                  ProjectConfig(name: nameController.text, directory: dirController.text),
+                );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditProjectDialog(int index, ProjectConfig project) {
+    final nameController = TextEditingController(text: project.name);
+    final dirController = TextEditingController(text: project.directory);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Project'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Project Name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: dirController,
+              decoration: const InputDecoration(labelText: 'Directory'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ref.read(terminalConfigProvider.notifier).removeProject(index);
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty && dirController.text.isNotEmpty) {
+                ref.read(terminalConfigProvider.notifier).updateProject(
+                  index,
+                  ProjectConfig(name: nameController.text, directory: dirController.text),
+                );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final config = ref.watch(terminalConfigProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Terminal Config'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.restore),
+            tooltip: 'Reset to Defaults',
+            onPressed: () {
+              ref.read(terminalConfigProvider.notifier).resetToDefaults();
+              final newConfig = ref.read(terminalConfigProvider);
+              _ipController.text = newConfig.dropletIp;
+              _userController.text = newConfig.sshUser;
+              _claudeController.text = newConfig.claudeCommand;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Reset to defaults')),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.save),
             onPressed: _saveConfig,
@@ -133,7 +345,54 @@ class _TerminalConfigScreenState extends ConsumerState<TerminalConfigScreen> {
           ),
           const SizedBox(height: 24),
 
-          // How It Works
+          // Projects
+          Row(
+            children: [
+              Expanded(child: _buildSectionHeader('Projects')),
+              IconButton(
+                icon: const Icon(Icons.add_circle),
+                onPressed: _showAddProjectDialog,
+                tooltip: 'Add Project',
+              ),
+            ],
+          ),
+          if (config.projects.isEmpty)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'No projects configured. Tap + to add one.',
+                  style: TextStyle(color: Colors.grey[400]),
+                ),
+              ),
+            )
+          else
+            ...config.projects.asMap().entries.map((entry) {
+              final index = entry.key;
+              final project = entry.value;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: const Icon(Icons.folder),
+                  title: Text(project.name),
+                  subtitle: Text(
+                    project.directory,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.edit),
+                    onPressed: () => _showEditProjectDialog(index, project),
+                  ),
+                ),
+              );
+            }),
+          const SizedBox(height: 24),
+
+          // Info cards
           _buildSectionHeader('How It Works'),
           _buildInfoCard(
             title: 'Connection Steps',
@@ -159,36 +418,6 @@ To add a new key:
 4. Restart update server:
    systemctl restart doewah-updates''',
             icon: Icons.vpn_key,
-          ),
-          const SizedBox(height: 12),
-
-          _buildInfoCard(
-            title: 'DigitalOcean Droplet',
-            content: '''This app is designed for DigitalOcean droplets.
-
-Requirements:
-• Ubuntu 22.04+ droplet
-• SSH enabled (port 22)
-• Node.js installed
-• Claude CLI installed (npm i -g @anthropic-ai/claude-code)
-
-The update server runs on port 8406 and serves:
-• /version - App version info
-• /download - APK download
-• /termux-key - SSH private key (base64)''',
-            icon: Icons.cloud,
-          ),
-          const SizedBox(height: 12),
-
-          _buildInfoCard(
-            title: 'Future LLM Support',
-            content: '''Coming soon:
-• Gemini CLI integration
-• OpenAI CLI integration
-• Custom LLM endpoints
-
-Configure your preferred AI assistant in settings.''',
-            icon: Icons.auto_awesome,
           ),
           const SizedBox(height: 32),
         ],
