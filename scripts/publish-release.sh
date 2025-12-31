@@ -31,8 +31,8 @@ echo "Publishing ${APK_NAME} to droplet..."
 # Create releases directory on droplet
 ssh -i ${DROPLET_SSH_KEY} root@${DROPLET_IP} "mkdir -p /root/doewah/releases"
 
-# Copy APK to droplet
-scp -i ${DROPLET_SSH_KEY} "$LOCAL_APK" root@${DROPLET_IP}:/root/doewah/releases/
+# Copy APK to droplet with correct name
+scp -i ${DROPLET_SSH_KEY} "$LOCAL_APK" root@${DROPLET_IP}:/root/doewah/releases/${APK_NAME}
 
 # Update version.json on droplet
 ssh -i ${DROPLET_SSH_KEY} root@${DROPLET_IP} "cat > /root/doewah/releases/version.json << EOF
