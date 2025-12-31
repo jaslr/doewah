@@ -702,7 +702,37 @@ function detectAction(message) {
     return { action: 'orchon-summary', params: {} };
   }
 
-  // Version check detection: "what version is livna" or "livna version"
+  // Version check detection: more flexible patterns
+  // Also detect based on project hint from thread context
+  const versionKeywords = /(?:what|check|get|show|current|latest)\s*(?:'s|is)?\s*(?:the\s+)?(?:current\s+|latest\s+)?version/i;
+
+  if (versionKeywords.test(msgLower)) {
+    // Try to find project name in message
+    loadContexts();
+
+    // Check each known project
+    for (const [key, ctx] of Object.entries(projectContexts)) {
+      if (msgLower.includes(key.toLowerCase()) ||
+          (ctx.aliases && ctx.aliases.some(a => msgLower.includes(a.toLowerCase())))) {
+        return { action: 'version', params: { project: ctx.name || key } };
+      }
+    }
+
+    // Check cloned projects
+    if (fs.existsSync(PROJECTS_DIR)) {
+      const dirs = fs.readdirSync(PROJECTS_DIR).filter(f => {
+        const fullPath = path.join(PROJECTS_DIR, f);
+        return fs.statSync(fullPath).isDirectory();
+      });
+      for (const dir of dirs) {
+        if (msgLower.includes(dir.toLowerCase())) {
+          return { action: 'version', params: { project: dir } };
+        }
+      }
+    }
+  }
+
+  // Also match explicit patterns like "livna version" or "version of livna"
   const versionPatterns = [
     /(?:what|check|get|show)\s+(?:is\s+)?(?:the\s+)?version\s+(?:of\s+)?(\w+)/i,
     /(\w+)\s+version/i,
@@ -1027,7 +1057,16 @@ async function executeWithStream(message, options = {}) {
   } = options;
 
   // First check for quick actions that don't need LLM
-  const detected = detectAction(message);
+  let detected = detectAction(message);
+
+  // If asking about version but no project detected in message, use thread's project hint
+  if (!detected && projectHint) {
+    const versionKeywords = /(?:what|check|get|show|current|latest)\s*(?:'s|is)?\s*(?:the\s+)?(?:current\s+|latest\s+)?version/i;
+    if (versionKeywords.test(message.toLowerCase())) {
+      detected = { action: 'version', params: { project: projectHint } };
+    }
+  }
+
   if (detected) {
     const result = await executeAction(detected.action, detected.params);
     if (!result.notSentry) {
