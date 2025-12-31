@@ -12,7 +12,13 @@ VERSION=$(grep 'version:' app/pubspec.yaml | sed 's/version: //' | cut -d'+' -f1
 BUILD_NUMBER=$(grep 'version:' app/pubspec.yaml | sed 's/version: //' | cut -d'+' -f2)
 
 APK_NAME="doewah-${VERSION}-${BUILD_TYPE}.apk"
-LOCAL_APK="app/build/app/outputs/apk/${BUILD_TYPE}/${APK_NAME}"
+
+# Flutter outputs to flutter-apk directory with generic names
+if [ "$BUILD_TYPE" = "release" ]; then
+  LOCAL_APK="app/build/app/outputs/flutter-apk/app-release.apk"
+else
+  LOCAL_APK="app/build/app/outputs/flutter-apk/app-debug.apk"
+fi
 
 if [ ! -f "$LOCAL_APK" ]; then
   echo "APK not found: $LOCAL_APK"
