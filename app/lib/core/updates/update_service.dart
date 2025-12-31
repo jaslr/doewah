@@ -141,6 +141,14 @@ class UpdateNotifier extends StateNotifier<UpdateState> {
       final request = http.Request('GET', Uri.parse('${AppConfig.updateUrl}/download'));
       final response = await client.send(request);
 
+      if (response.statusCode != 200) {
+        state = state.copyWith(
+          status: UpdateStatus.error,
+          errorMessage: 'Download failed: ${response.statusCode}',
+        );
+        return;
+      }
+
       final contentLength = response.contentLength ?? 0;
       final bytes = <int>[];
       var downloaded = 0;
@@ -155,18 +163,45 @@ class UpdateNotifier extends StateNotifier<UpdateState> {
         }
       }
 
-      // Save to downloads directory
-      final dir = await getExternalStorageDirectory();
-      if (dir == null || state.updateInfo == null) {
+      // Verify we got the full file
+      if (contentLength > 0 && bytes.length != contentLength) {
         state = state.copyWith(
           status: UpdateStatus.error,
-          errorMessage: 'Storage not available',
+          errorMessage: 'Incomplete download: ${bytes.length}/$contentLength bytes',
         );
         return;
       }
+
+      // Verify it's a valid APK (starts with PK zip header)
+      if (bytes.length < 4 || bytes[0] != 0x50 || bytes[1] != 0x4B) {
+        state = state.copyWith(
+          status: UpdateStatus.error,
+          errorMessage: 'Invalid APK file format',
+        );
+        return;
+      }
+
+      // Use app's cache directory (more reliable on modern Android)
+      final dir = await getApplicationCacheDirectory();
       final apkPath = '${dir.path}/${state.updateInfo!.apkFile}';
       final file = File(apkPath);
-      await file.writeAsBytes(bytes);
+
+      // Delete old file if exists
+      if (await file.exists()) {
+        await file.delete();
+      }
+
+      await file.writeAsBytes(bytes, flush: true);
+
+      // Verify file was written correctly
+      final writtenSize = await file.length();
+      if (writtenSize != bytes.length) {
+        state = state.copyWith(
+          status: UpdateStatus.error,
+          errorMessage: 'File write error: $writtenSize/${bytes.length} bytes',
+        );
+        return;
+      }
 
       state = state.copyWith(
         status: UpdateStatus.readyToInstall,

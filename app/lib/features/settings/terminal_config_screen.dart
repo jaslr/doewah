@@ -453,8 +453,8 @@ To add a new key:
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icon),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
         ),
         filled: true,
         fillColor: Colors.grey[900],
