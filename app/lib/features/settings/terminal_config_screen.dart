@@ -18,7 +18,9 @@ class TerminalConfig {
       ProjectConfig(name: 'Livna', directory: '/root/projects/livna'),
       ProjectConfig(name: 'Brontiq', directory: '/root/projects/brontiq'),
       ProjectConfig(name: 'ORCHON', directory: '/root/projects/orchon'),
+      ProjectConfig(name: 'LittleListOfLights', directory: '/root/projects/littlelistoflights'),
       ProjectConfig(name: 'Doewah', directory: '/root/doewah'),
+      ProjectConfig(name: 'Agent Deck', directory: '/root/agent-deck'),
     ],
   });
 

@@ -72,9 +72,9 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
       // Escape prompt for shell
       const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
-      // Set token in env and run claude directly
+      // Set token in env and run claude with sandbox mode and skip permissions
       const result = execSync(
-        `CLAUDE_CODE_OAUTH_TOKEN='${oauthToken.trim()}' claude -p '${escapedPrompt}'`,
+        `IS_SANDBOX=1 CLAUDE_CODE_OAUTH_TOKEN='${oauthToken.trim()}' claude --dangerously-skip-permissions -p '${escapedPrompt}'`,
         {
           cwd: workingDir,
           timeout,
