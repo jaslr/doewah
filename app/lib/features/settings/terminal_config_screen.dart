@@ -25,13 +25,18 @@ class TerminalConfig {
   final String sshUser;
   final String claudeCommand;
   final List<ProjectConfig> projects;
+  final int terminalFontScale; // Percentage: 50-200, default 100
 
   const TerminalConfig({
     this.dropletIp = '209.38.85.244',
     this.sshUser = 'root',
     this.claudeCommand = 'IS_SANDBOX=1 claude --dangerously-skip-permissions',
     this.projects = const [],
+    this.terminalFontScale = 100,
   });
+
+  // Get actual font size from scale (base size is 14)
+  double get terminalFontSize => 14.0 * (terminalFontScale / 100.0);
 
   // Sensible defaults
   static const List<ProjectConfig> defaultProjects = [
@@ -48,12 +53,14 @@ class TerminalConfig {
     String? sshUser,
     String? claudeCommand,
     List<ProjectConfig>? projects,
+    int? terminalFontScale,
   }) {
     return TerminalConfig(
       dropletIp: dropletIp ?? this.dropletIp,
       sshUser: sshUser ?? this.sshUser,
       claudeCommand: claudeCommand ?? this.claudeCommand,
       projects: projects ?? this.projects,
+      terminalFontScale: terminalFontScale ?? this.terminalFontScale,
     );
   }
 
@@ -62,6 +69,7 @@ class TerminalConfig {
     'sshUser': sshUser,
     'claudeCommand': claudeCommand,
     'projects': projects.map((p) => p.toJson()).toList(),
+    'terminalFontScale': terminalFontScale,
   };
 
   factory TerminalConfig.fromJson(Map<String, dynamic> json) => TerminalConfig(
@@ -71,6 +79,7 @@ class TerminalConfig {
     projects: (json['projects'] as List<dynamic>?)
         ?.map((p) => ProjectConfig.fromJson(p as Map<String, dynamic>))
         .toList() ?? TerminalConfig.defaultProjects,
+    terminalFontScale: json['terminalFontScale'] as int? ?? 100,
   );
 }
 
@@ -113,6 +122,13 @@ class TerminalConfigNotifier extends Notifier<TerminalConfig> {
       sshUser: sshUser,
       claudeCommand: claudeCommand,
     );
+    _saveToStorage();
+  }
+
+  void setTerminalFontScale(int scale) {
+    // Clamp between 50% and 200%
+    final clamped = scale.clamp(50, 200);
+    state = state.copyWith(terminalFontScale: clamped);
     _saveToStorage();
   }
 
@@ -345,6 +361,11 @@ class _TerminalConfigScreenState extends ConsumerState<TerminalConfigScreen> {
           ),
           const SizedBox(height: 24),
 
+          // Appearance Settings
+          _buildSectionHeader('Appearance'),
+          _buildFontScaleSelector(config.terminalFontScale),
+          const SizedBox(height: 24),
+
           // Projects
           Row(
             children: [
@@ -458,6 +479,106 @@ To add a new key:
         ),
         filled: true,
         fillColor: Colors.grey[900],
+      ),
+    );
+  }
+
+  Widget _buildFontScaleSelector(int currentScale) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.text_fields, size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text(
+                  'Terminal Font Size',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$currentScale%',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline),
+                  onPressed: currentScale > 50
+                      ? () => ref.read(terminalConfigProvider.notifier).setTerminalFontScale(currentScale - 10)
+                      : null,
+                  tooltip: 'Decrease',
+                ),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: Theme.of(context).colorScheme.primary,
+                      inactiveTrackColor: Colors.grey[800],
+                      thumbColor: Theme.of(context).colorScheme.primary,
+                      overlayColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                    ),
+                    child: Slider(
+                      value: currentScale.toDouble(),
+                      min: 50,
+                      max: 200,
+                      divisions: 15, // 10% increments from 50 to 200
+                      label: '$currentScale%',
+                      onChanged: (value) {
+                        // Round to nearest 10
+                        final rounded = (value / 10).round() * 10;
+                        ref.read(terminalConfigProvider.notifier).setTerminalFontScale(rounded);
+                      },
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: currentScale < 200
+                      ? () => ref.read(terminalConfigProvider.notifier).setTerminalFontScale(currentScale + 10)
+                      : null,
+                  tooltip: 'Increase',
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Preview
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[800]!),
+              ),
+              child: Text(
+                'Preview: The quick brown fox',
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 14.0 * (currentScale / 100.0),
+                  color: Colors.green[400],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

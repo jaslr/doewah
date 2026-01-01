@@ -248,8 +248,8 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
               child: TerminalView(
                 terminal,
                 focusNode: _terminalFocusNode,
-                textStyle: const TerminalStyle(
-                  fontSize: 14,
+                textStyle: TerminalStyle(
+                  fontSize: ref.watch(terminalConfigProvider).terminalFontSize,
                   fontFamily: 'monospace',
                 ),
               ),
