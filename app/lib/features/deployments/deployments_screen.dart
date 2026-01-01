@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/config.dart';
 import '../../core/websocket/websocket_service.dart';
 import '../../core/orchon/orchon_service.dart';
@@ -63,6 +64,12 @@ class _DeploymentsScreenState extends ConsumerState<DeploymentsScreen> {
       appBar: AppBar(
         title: Row(
           children: [
+            SvgPicture.asset(
+              'assets/icon.svg',
+              height: 28,
+              width: 28,
+            ),
+            const SizedBox(width: 10),
             Text(
               'DOEWAH',
               style: TextStyle(
