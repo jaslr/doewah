@@ -78,24 +78,42 @@ GitHub/Cloudflare/Fly.io → ORCHON (monitors) → DOA (displays + acts)
 
 ## Deployment
 
+### IMPORTANT: Git Push ≠ Production Deploy
+
+| Action | What it does | Does NOT do |
+|--------|--------------|-------------|
+| `git push` | Backs up code to GitHub | Deploy to droplet, publish APK |
+| `npm run app:ship` | Build + publish APK to OTA | Push to git |
+| `npm run droplet:deploy` | Pull code + restart services | Build/publish APK |
+
+**To fully deploy changes, you need BOTH git push AND the relevant deploy command.**
+
 ### Backend (Bot + WebSocket)
-Push to main, then deploy to droplet:
 ```bash
-git push && ssh root@209.38.85.244 "cd /root/doewah && git pull && systemctl restart claude-bot doewah-ws doewah-updates"
+# 1. Push to git (backup)
+git push
+
+# 2. Deploy to droplet (production)
+npm run droplet:deploy
+# OR manually:
+ssh root@209.38.85.244 "cd /root/doewah && git pull && systemctl restart claude-bot doewah-ws doewah-updates"
 ```
 
 ### Flutter App (OTA Auto-Update)
-The app auto-updates via the self-hosted OTA server. To deploy a new version:
-
 ```bash
-# 1. Build release APK with secrets
+# 1. Bump version in app/pubspec.yaml
+
+# 2. Build + publish (gets secret from /home/chip/orchon/.env)
 cd app
 flutter build apk --release \
-  --dart-define=ORCHON_API_SECRET=<secret> \
+  --dart-define=ORCHON_API_SECRET=$(grep API_SECRET /home/chip/orchon/.env | cut -d= -f2) \
   --dart-define=WS_URL=ws://209.38.85.244:8405
 
-# 2. Publish to OTA server
-npm run publish:apk
+# 3. Publish to OTA server
+cd .. && npm run app:publish
+
+# OR all-in-one (if you set up .env with secrets):
+npm run app:ship
 ```
 
 Existing installed apps will prompt to update on next launch.
@@ -103,6 +121,11 @@ Existing installed apps will prompt to update on next launch.
 **First-time install / APK download:**
 ```
 http://209.38.85.244:8406/download
+```
+
+**Check current OTA version:**
+```
+curl http://209.38.85.244:8406/version
 ```
 
 ---
