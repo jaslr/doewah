@@ -135,9 +135,15 @@ class SettingsDrawer extends ConsumerWidget {
                   _SettingsTile(
                     icon: Icons.color_lens_outlined,
                     title: 'Appearance',
-                    subtitle: 'Theme and display options',
+                    subtitle: 'Terminal font size & display',
                     onTap: () {
-                      // TODO: Appearance settings
+                      Navigator.pop(context); // Close drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TerminalConfigScreen(),
+                        ),
+                      );
                     },
                   ),
                   _UpdateTile(ref: ref),

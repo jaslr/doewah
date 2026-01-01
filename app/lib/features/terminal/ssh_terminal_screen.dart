@@ -182,7 +182,8 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
 
   void _sendInput(String text) {
     if (_session != null && text.isNotEmpty) {
-      _session!.write(Uint8List.fromList(utf8.encode('$text\n')));
+      // Send text followed by carriage return (Enter key)
+      _session!.write(Uint8List.fromList(utf8.encode('$text\r')));
       _inputController.clear();
     }
   }
