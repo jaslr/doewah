@@ -25,3 +25,4 @@ jobs:
 
       - name: Validate WebSocket server
         run: node -c ws/server.js && node -c ws/updates.js
+# Trigger CI
