@@ -50,6 +50,7 @@ class UpdateState {
   final double downloadProgress;
   final String? errorMessage;
   final String? downloadedApkPath;
+  final DateTime? lastChecked;
 
   const UpdateState({
     this.status = UpdateStatus.idle,
@@ -57,7 +58,11 @@ class UpdateState {
     this.downloadProgress = 0,
     this.errorMessage,
     this.downloadedApkPath,
+    this.lastChecked,
   });
+
+  /// Whether an update is available (for badge display)
+  bool get hasUpdate => status == UpdateStatus.available || status == UpdateStatus.readyToInstall;
 
   UpdateState copyWith({
     UpdateStatus? status,
@@ -65,6 +70,7 @@ class UpdateState {
     double? downloadProgress,
     String? errorMessage,
     String? downloadedApkPath,
+    DateTime? lastChecked,
   }) {
     return UpdateState(
       status: status ?? this.status,
@@ -72,6 +78,7 @@ class UpdateState {
       downloadProgress: downloadProgress ?? this.downloadProgress,
       errorMessage: errorMessage,
       downloadedApkPath: downloadedApkPath ?? this.downloadedApkPath,
+      lastChecked: lastChecked ?? this.lastChecked,
     );
   }
 }
@@ -99,12 +106,19 @@ class UpdateNotifier extends StateNotifier<UpdateState> {
           state = state.copyWith(
             status: UpdateStatus.available,
             updateInfo: updateInfo,
+            lastChecked: DateTime.now(),
           );
         } else {
-          state = state.copyWith(status: UpdateStatus.upToDate);
+          state = state.copyWith(
+            status: UpdateStatus.upToDate,
+            lastChecked: DateTime.now(),
+          );
         }
       } else if (response.statusCode == 404) {
-        state = state.copyWith(status: UpdateStatus.upToDate);
+        state = state.copyWith(
+          status: UpdateStatus.upToDate,
+          lastChecked: DateTime.now(),
+        );
       } else {
         state = state.copyWith(
           status: UpdateStatus.error,

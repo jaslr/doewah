@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const UPDATES_DIR = process.env.UPDATES_DIR || '/root/doewah/releases';
 const UPDATES_PORT = process.env.UPDATES_PORT || 8406;
@@ -103,6 +104,45 @@ const server = http.createServer((req, res) => {
     });
 
     fs.createReadStream(apkPath).pipe(res);
+  } else if (req.method === 'GET' && req.url === '/tmux-sessions') {
+    // List tmux sessions
+    try {
+      const output = execSync('tmux list-sessions -F "#{session_name}|#{session_windows}|#{session_attached}"', {
+        encoding: 'utf8',
+        timeout: 5000,
+      }).trim();
+
+      const sessions = output.split('\n').filter(line => line).map(line => {
+        const [name, windows, attached] = line.split('|');
+        return { name, windows, attached: attached === '1' };
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(sessions));
+    } catch (e) {
+      // No sessions or tmux error
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([]));
+    }
+  } else if (req.method === 'POST' && req.url?.startsWith('/tmux-kill')) {
+    // Kill a tmux session
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const sessionName = url.searchParams.get('session');
+
+    if (!sessionName) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing session parameter' }));
+      return;
+    }
+
+    try {
+      execSync(`tmux kill-session -t "${sessionName}"`, { timeout: 5000 });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, message: `Killed session: ${sessionName}` }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
   } else {
     res.writeHead(404);
     res.end('Not found');

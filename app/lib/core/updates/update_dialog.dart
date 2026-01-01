@@ -11,7 +11,15 @@ class UpdateDialog extends ConsumerWidget {
     final updateState = ref.watch(updateProvider);
 
     return AlertDialog(
-      title: Text(_getTitle(updateState.status)),
+      title: Text(
+        _getTitle(updateState.status).toUpperCase(),
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          letterSpacing: 3,
+          color: Colors.grey[400],
+        ),
+      ),
       content: _buildContent(updateState),
       actions: _buildActions(context, ref, updateState),
     );

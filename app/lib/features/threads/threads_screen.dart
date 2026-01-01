@@ -104,9 +104,12 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
         final Color color;
         final String tooltip;
         switch (state) {
-          case WsConnectionState.connected:
+          case WsConnectionState.authenticated:
             color = Colors.green;
-            tooltip = 'Connected';
+            tooltip = 'Connected & authenticated';
+          case WsConnectionState.connected:
+            color = Colors.lightGreen;
+            tooltip = 'Connected, authenticating...';
           case WsConnectionState.connecting:
             color = Colors.orange;
             tooltip = 'Connecting...';

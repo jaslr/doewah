@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:http/http.dart' as http;
 import '../../core/updates/update_service.dart';
 import '../terminal/ssh_terminal_screen.dart';
 import '../threads/threads_screen.dart';
@@ -65,23 +67,7 @@ class SettingsDrawer extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
                   // Primary: Launch Claude
-                  _SettingsTile(
-                    icon: Icons.smart_toy,
-                    title: 'Launch Claude',
-                    subtitle: 'AI assistant via SSH',
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SshTerminalScreen(
-                            launchMode: LaunchMode.claude,
-                          ),
-                        ),
-                      );
-                    },
-                    highlight: true,
-                  ),
+                  _LaunchClaudeTile(ref: ref),
                   // Secondary: Launch Bash
                   _SettingsTile(
                     icon: Icons.terminal,
@@ -312,14 +298,16 @@ class _UpdateTile extends StatelessWidget {
     String subtitle;
     IconData icon = Icons.system_update_outlined;
     bool isLoading = false;
+    bool hasUpdate = updateState.hasUpdate;
+    Color? highlightColor = hasUpdate ? Colors.orange : null;
 
     switch (updateState.status) {
       case UpdateStatus.checking:
-        subtitle = 'Checking...';
+        subtitle = 'Checking for updates...';
         isLoading = true;
         break;
       case UpdateStatus.available:
-        subtitle = 'Update available: v${updateState.updateInfo?.version}';
+        subtitle = 'v${updateState.updateInfo?.version} available - tap to install';
         icon = Icons.download;
         break;
       case UpdateStatus.downloading:
@@ -327,11 +315,24 @@ class _UpdateTile extends StatelessWidget {
         isLoading = true;
         break;
       case UpdateStatus.readyToInstall:
-        subtitle = 'Ready to install';
+        subtitle = 'Tap to install v${updateState.updateInfo?.version}';
         icon = Icons.install_mobile;
         break;
       case UpdateStatus.upToDate:
-        subtitle = 'You\'re up to date';
+        // Only show "up to date" if we actually checked
+        final lastChecked = updateState.lastChecked;
+        if (lastChecked != null) {
+          final ago = DateTime.now().difference(lastChecked);
+          if (ago.inMinutes < 1) {
+            subtitle = 'Up to date (just now)';
+          } else if (ago.inHours < 1) {
+            subtitle = 'Up to date (${ago.inMinutes}m ago)';
+          } else {
+            subtitle = 'Up to date (${ago.inHours}h ago)';
+          }
+        } else {
+          subtitle = 'Tap to check for updates';
+        }
         icon = Icons.check_circle_outline;
         break;
       case UpdateStatus.error:
@@ -339,15 +340,16 @@ class _UpdateTile extends StatelessWidget {
         icon = Icons.error_outline;
         break;
       default:
-        subtitle = 'Check for app updates';
+        subtitle = 'Tap to check for updates';
     }
 
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.grey[850],
+          color: hasUpdate ? Colors.orange.withOpacity(0.2) : Colors.grey[850],
           borderRadius: BorderRadius.circular(8),
+          border: hasUpdate ? Border.all(color: Colors.orange.withOpacity(0.5)) : null,
         ),
         child: isLoading
             ? const SizedBox(
@@ -355,25 +357,25 @@ class _UpdateTile extends StatelessWidget {
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : Icon(icon, color: Colors.grey[400], size: 20),
+            : Icon(icon, color: highlightColor ?? Colors.grey[400], size: 20),
       ),
-      title: const Text(
-        'Check for Update',
+      title: Text(
+        hasUpdate ? 'Update Available' : 'Check for Update',
         style: TextStyle(
-          color: Colors.white,
+          color: highlightColor ?? Colors.white,
           fontWeight: FontWeight.w500,
         ),
       ),
       subtitle: Text(
         subtitle,
         style: TextStyle(
-          color: Colors.grey[600],
+          color: hasUpdate ? Colors.orange[300] : Colors.grey[600],
           fontSize: 12,
         ),
       ),
       trailing: Icon(
         Icons.chevron_right,
-        color: Colors.grey[600],
+        color: highlightColor ?? Colors.grey[600],
       ),
       onTap: () {
         if (updateState.status == UpdateStatus.available) {
@@ -384,6 +386,310 @@ class _UpdateTile extends StatelessWidget {
           ref.read(updateProvider.notifier).checkForUpdate();
         }
       },
+    );
+  }
+}
+
+class _LaunchClaudeTile extends StatelessWidget {
+  final WidgetRef ref;
+
+  const _LaunchClaudeTile({required this.ref});
+
+  @override
+  Widget build(BuildContext context) {
+    final highlightColor = const Color(0xFF6366F1);
+
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: highlightColor.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: highlightColor.withOpacity(0.5)),
+        ),
+        child: Icon(Icons.smart_toy, color: highlightColor, size: 20),
+      ),
+      title: Text(
+        'Launch Claude',
+        style: TextStyle(
+          color: highlightColor,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      subtitle: Text(
+        'AI assistant via SSH',
+        style: TextStyle(
+          color: Colors.grey[600],
+          fontSize: 12,
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(Icons.list, color: highlightColor),
+            onPressed: () => _showSessionPicker(context),
+            tooltip: 'Session options',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.chevron_right, color: highlightColor),
+        ],
+      ),
+      onTap: () {
+        Navigator.pop(context); // Close drawer
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const SshTerminalScreen(
+              launchMode: LaunchMode.claude,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSessionPicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => _SessionPickerSheet(ref: ref),
+    );
+  }
+}
+
+class _SessionPickerSheet extends StatefulWidget {
+  final WidgetRef ref;
+
+  const _SessionPickerSheet({required this.ref});
+
+  @override
+  State<_SessionPickerSheet> createState() => _SessionPickerSheetState();
+}
+
+class _SessionPickerSheetState extends State<_SessionPickerSheet> {
+  List<Map<String, String>> _sessions = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSessions();
+  }
+
+  Future<void> _loadSessions() async {
+    final config = widget.ref.read(terminalConfigProvider);
+
+    try {
+      // Fetch tmux sessions from the update server
+      final url = 'http://${config.dropletIp}:8406/tmux-sessions';
+      final response = await http.get(Uri.parse(url)).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw Exception('Connection timeout'),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          _sessions = data.map((s) => {
+            'name': s['name']?.toString() ?? 'unknown',
+            'windows': s['windows']?.toString() ?? '0',
+            'attached': s['attached']?.toString() ?? 'false',
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = 'Failed to fetch sessions: ${response.statusCode}';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Text(
+              'CLAUDE SESSIONS',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 3,
+                color: Colors.grey[400],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Start New option (always at top)
+            _SessionOption(
+              icon: Icons.add_circle_outline,
+              title: 'Start New Session',
+              subtitle: 'Launch a fresh Claude instance',
+              color: const Color(0xFF6366F1),
+              onTap: () {
+                Navigator.pop(context); // Close bottom sheet
+                Navigator.pop(context); // Close drawer
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SshTerminalScreen(
+                      launchMode: LaunchMode.claude,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Could not fetch sessions:\n$_error',
+                  style: TextStyle(color: Colors.grey[500]),
+                ),
+              )
+            else if (_sessions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Divider(color: Colors.grey),
+              const SizedBox(height: 8),
+              Text(
+                'EXISTING SESSIONS',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 2,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...(_sessions.map((session) => _SessionOption(
+                icon: Icons.terminal,
+                title: session['name'] ?? 'unknown',
+                subtitle: '${session['windows']} windows${session['attached'] == 'true' ? ' (attached)' : ''}',
+                color: Colors.grey[400]!,
+                trailing: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.red, size: 20),
+                  onPressed: () => _killSession(session['name']!),
+                  tooltip: 'Kill session',
+                ),
+                onTap: () {
+                  Navigator.pop(context); // Close bottom sheet
+                  Navigator.pop(context); // Close drawer
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SshTerminalScreen(
+                        launchMode: LaunchMode.claude,
+                        initialCommand: 'tmux attach -t ${session['name']}',
+                      ),
+                    ),
+                  );
+                },
+              ))),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _killSession(String sessionName) async {
+    final config = widget.ref.read(terminalConfigProvider);
+
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        title: const Text('Kill Session?'),
+        content: Text('Kill tmux session "$sessionName"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Kill'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final url = 'http://${config.dropletIp}:8406/tmux-kill?session=$sessionName';
+      await http.post(Uri.parse(url));
+      _loadSessions(); // Refresh the list
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to kill session: $e')),
+        );
+      }
+    }
+  }
+}
+
+class _SessionOption extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final Widget? trailing;
+  final VoidCallback onTap;
+
+  const _SessionOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    this.trailing,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: color),
+      title: Text(
+        title,
+        style: TextStyle(color: Colors.white),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+      ),
+      trailing: trailing ?? Icon(Icons.chevron_right, color: color),
+      onTap: onTap,
     );
   }
 }

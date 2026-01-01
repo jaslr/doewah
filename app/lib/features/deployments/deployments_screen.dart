@@ -5,6 +5,7 @@ import '../../core/config.dart';
 import '../../core/websocket/websocket_service.dart';
 import '../../core/orchon/orchon_service.dart';
 import '../../core/updates/update_dialog.dart';
+import '../../core/updates/update_service.dart';
 import '../settings/settings_drawer.dart';
 import '../terminal/quick_commands.dart';
 import '../threads/threads_screen.dart';
@@ -90,12 +91,36 @@ class _DeploymentsScreenState extends ConsumerState<DeploymentsScreen> {
             onPressed: () => showQuickCommands(context),
           ),
           Builder(
-            builder: (context) => IconButton(
-              icon: const Icon(Icons.settings),
-              onPressed: () {
-                Scaffold.of(context).openEndDrawer();
-              },
-            ),
+            builder: (context) {
+              final updateState = ref.watch(updateProvider);
+              final hasUpdate = updateState.hasUpdate;
+
+              return IconButton(
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.settings),
+                    if (hasUpdate)
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xFF1A1A2E), width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                onPressed: () {
+                  Scaffold.of(context).openEndDrawer();
+                },
+              );
+            },
           ),
         ],
       ),
@@ -124,9 +149,12 @@ class _DeploymentsScreenState extends ConsumerState<DeploymentsScreen> {
         final Color color;
         final String tooltip;
         switch (state) {
-          case WsConnectionState.connected:
+          case WsConnectionState.authenticated:
             color = Colors.green;
-            tooltip = 'Connected';
+            tooltip = 'Connected & authenticated';
+          case WsConnectionState.connected:
+            color = Colors.lightGreen;
+            tooltip = 'Connected, authenticating...';
           case WsConnectionState.connecting:
             color = Colors.orange;
             tooltip = 'Connecting...';

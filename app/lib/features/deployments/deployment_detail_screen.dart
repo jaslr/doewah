@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import '../../models/deployment.dart';
+import '../../core/websocket/websocket_service.dart';
 import '../threads/threads_provider.dart';
 import '../threads/chat_screen.dart';
 
@@ -21,18 +23,45 @@ class DeploymentDetailScreen extends ConsumerStatefulWidget {
 class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen> {
   bool _waitingForThread = false;
   int _previousThreadCount = 0;
+  String? _statusMessage;
+  bool _isError = false;
 
   @override
   Widget build(BuildContext context) {
     final d = widget.deployment;
     final threadsState = ref.watch(threadsProvider);
 
+    // Handle server errors
+    if (_waitingForThread && threadsState.error != null) {
+      _waitingForThread = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _isError = true;
+            _statusMessage = 'Server error: ${threadsState.error}';
+          });
+        }
+      });
+    }
+
     // Navigate to new thread when it's created
     if (_waitingForThread && threadsState.threads.length > _previousThreadCount) {
       _waitingForThread = false;
       final newThread = threadsState.threads.first;
 
+      // Update status before navigating
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _isError = false;
+            _statusMessage = 'Thread created! Opening chat...';
+          });
+        }
+      });
+
+      // Small delay to show the message, then navigate
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -164,10 +193,8 @@ class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen>
             // Send to Claude button
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _handleSendToClaude,
-                icon: const Icon(Icons.smart_toy),
-                label: const Text('Send to Claude'),
+              child: FilledButton(
+                onPressed: _waitingForThread ? null : _handleSendToClaude,
                 style: FilledButton.styleFrom(
                   backgroundColor: d.isFailure ? Colors.red : const Color(0xFF6366F1),
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -175,8 +202,48 @@ class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen>
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
+                child: const Text('Send to Claude'),
               ),
             ),
+
+            // Status message below button
+            if (_statusMessage != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _isError ? Colors.red.withOpacity(0.1) : Colors.grey[900],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _isError ? Colors.red.withOpacity(0.3) : Colors.grey[700]!,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    if (_isError)
+                      const Icon(Icons.error_outline, color: Colors.red, size: 18)
+                    else
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _statusMessage!,
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 13,
+                          color: _isError ? Colors.red[300] : Colors.grey[400],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -184,6 +251,25 @@ class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen>
   }
 
   void _handleSendToClaude() {
+    // Check WebSocket is authenticated
+    final wsService = ref.read(webSocketServiceProvider);
+    final wsState = wsService.currentState;
+
+    if (wsState != WsConnectionState.authenticated) {
+      setState(() {
+        _isError = true;
+        _statusMessage = wsState == WsConnectionState.connected
+            ? 'WebSocket connected but not authenticated yet'
+            : 'WebSocket not connected (state: ${wsState.name})';
+      });
+      return;
+    }
+
+    setState(() {
+      _isError = false;
+      _statusMessage = 'Creating thread...';
+    });
+
     // Remember thread count before creating
     _previousThreadCount = ref.read(threadsProvider).threads.length;
     _waitingForThread = true;
@@ -192,6 +278,17 @@ class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen>
     ref.read(threadsProvider.notifier).createThread(
       projectHint: widget.deployment.projectName.toLowerCase(),
     );
+
+    // Timeout after 10 seconds
+    Timer(const Duration(seconds: 10), () {
+      if (mounted && _waitingForThread) {
+        setState(() {
+          _waitingForThread = false;
+          _isError = true;
+          _statusMessage = 'Timeout: No response from server after 10s';
+        });
+      }
+    });
   }
 
   String _buildContextMessage() {

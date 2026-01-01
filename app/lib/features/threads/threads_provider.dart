@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/thread.dart';
 import '../../models/message.dart';
@@ -48,8 +49,17 @@ class ThreadsNotifier extends StateNotifier<ThreadsState> {
         case 'thread.deleted':
           _handleThreadDeleted(message.data);
           break;
+        case 'error':
+          _handleError(message.data);
+          break;
       }
     });
+  }
+
+  void _handleError(Map<String, dynamic> data) {
+    final error = data['error'] as String? ?? 'Unknown error';
+    debugPrint('[Threads] Server error: $error');
+    state = state.copyWith(error: error, isLoading: false);
   }
 
   void _handleThreadCreated(Map<String, dynamic> data) {

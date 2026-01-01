@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// WebSocket connection states
-enum WsConnectionState { disconnected, connecting, connected, error }
+enum WsConnectionState { disconnected, connecting, connected, authenticated, error }
 
 /// Message types from server
 class ServerMessage {
@@ -156,6 +156,13 @@ class WebSocketService {
       print('[WS] Received: $data');
       final json = jsonDecode(data as String) as Map<String, dynamic>;
       final message = ServerMessage.fromJson(json);
+
+      // Handle auth success specially to update state
+      if (message.type == 'auth.success') {
+        print('[WS] Authenticated successfully');
+        _updateState(WsConnectionState.authenticated);
+      }
+
       _messageController.add(message);
     } catch (e) {
       print('[WS] Error parsing message: $e');
