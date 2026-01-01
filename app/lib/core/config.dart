@@ -17,6 +17,20 @@ class AppConfig {
     defaultValue: 'http://$dropletIp:8406',
   );
 
+  /// ORCHON (Observatory) API URL
+  /// Set via --dart-define=ORCHON_URL=... at build time
+  static const String orchonUrl = String.fromEnvironment(
+    'ORCHON_URL',
+    defaultValue: 'https://observatory-backend.fly.dev',
+  );
+
+  /// ORCHON API secret for authentication
+  /// Set via --dart-define=ORCHON_API_SECRET=... at build time
+  static const String orchonApiSecret = String.fromEnvironment(
+    'ORCHON_API_SECRET',
+    defaultValue: '',
+  );
+
   /// ttyd web terminal URL
   static const String ttydUrl = 'http://$dropletIp:7681';
   static const String ttydUser = 'user';

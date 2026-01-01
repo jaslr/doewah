@@ -6,8 +6,13 @@ import 'threads_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final Thread thread;
+  final String? initialMessage;
 
-  const ChatScreen({super.key, required this.thread});
+  const ChatScreen({
+    super.key,
+    required this.thread,
+    this.initialMessage,
+  });
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -17,6 +22,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
+  bool _initialMessageSent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Send initial message after a short delay to ensure thread is ready
+    if (widget.initialMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _sendInitialMessage();
+      });
+    }
+  }
+
+  void _sendInitialMessage() {
+    if (_initialMessageSent || widget.initialMessage == null) return;
+    _initialMessageSent = true;
+
+    // Small delay to ensure WebSocket is ready for this thread
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      ref.read(chatProvider(widget.thread.id).notifier).sendMessage(
+        widget.initialMessage!,
+      );
+    });
+  }
 
   @override
   void dispose() {

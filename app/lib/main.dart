@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'features/threads/threads_screen.dart';
+import 'features/deployments/deployments_screen.dart';
 
 // Global error log
 final List<String> errorLog = [];
@@ -54,7 +54,7 @@ class DoewahApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const ThreadsScreen(),
+      home: const DeploymentsScreen(),
     );
   }
 }

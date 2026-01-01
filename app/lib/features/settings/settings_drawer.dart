@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/updates/update_service.dart';
 import '../terminal/ssh_terminal_screen.dart';
+import '../threads/threads_screen.dart';
 import 'terminal_config_screen.dart';
 
 /// Provider for package info
@@ -94,6 +95,21 @@ class SettingsDrawer extends ConsumerWidget {
                           builder: (context) => const SshTerminalScreen(
                             launchMode: LaunchMode.bash,
                           ),
+                        ),
+                      );
+                    },
+                  ),
+                  // All Threads
+                  _SettingsTile(
+                    icon: Icons.chat_bubble_outline,
+                    title: 'All Threads',
+                    subtitle: 'View conversation threads',
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ThreadsScreen(),
                         ),
                       );
                     },

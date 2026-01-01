@@ -2,37 +2,41 @@
 
 ## Deployment
 
-**DOEWAH should auto-deploy on push to main.**
-
-Current state: Manual (`git pull` on droplet required)
-
-TODO: Set up GitHub Actions workflow to SSH into droplet and restart bot on push:
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy to Droplet
-on:
-  push:
-    branches: [main]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: 209.38.85.244
-          username: root
-          key: ${{ secrets.DROPLET_SSH_KEY }}
-          script: |
-            cd /root/doewah
-            git pull
-            systemctl restart claude-bot
-```
-
-**Until auto-deploy is set up**, after pushing changes:
+### Backend (Bot + WebSocket)
+Push to main, then deploy to droplet:
 ```bash
-ssh root@209.38.85.244 "cd /root/doewah && git pull && systemctl restart claude-bot"
+git push && ssh root@209.38.85.244 "cd /root/doewah && git pull && systemctl restart claude-bot doewah-ws doewah-updates"
 ```
+
+### Flutter App (OTA Auto-Update)
+The app auto-updates via the self-hosted OTA server. To deploy a new version:
+
+```bash
+# 1. Build release APK with secrets
+cd app
+flutter build apk --release \
+  --dart-define=ORCHON_API_SECRET=<secret> \
+  --dart-define=WS_URL=ws://209.38.85.244:8405
+
+# 2. Publish to OTA server
+npm run publish:apk
+```
+
+Existing installed apps will prompt to update on next launch.
+
+**First-time install / APK download:**
+```
+http://209.38.85.244:8406/download
+```
+
+### ORCHON Integration
+The Flutter app fetches deployments from ORCHON at `https://observatory-backend.fly.dev`.
+
+| DOA Config | ORCHON Config | Purpose |
+|------------|---------------|---------|
+| `ORCHON_API_SECRET` (dart-define) | `API_SECRET` (env) | Bearer token auth |
+
+Both must have the same value. Set in Fly.io secrets for ORCHON backend.
 
 ## Architecture
 
