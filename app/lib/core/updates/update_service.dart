@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -7,6 +9,9 @@ import 'package:open_filex/open_filex.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../config.dart';
+
+/// How often to check for updates (30 minutes)
+const _updateCheckInterval = Duration(minutes: 30);
 
 class UpdateInfo {
   final String version;
@@ -84,10 +89,36 @@ class UpdateState {
 }
 
 class UpdateNotifier extends StateNotifier<UpdateState> {
-  UpdateNotifier() : super(const UpdateState());
+  Timer? _periodicCheckTimer;
 
-  Future<void> checkForUpdate() async {
-    state = state.copyWith(status: UpdateStatus.checking);
+  UpdateNotifier() : super(const UpdateState()) {
+    // Check immediately on startup, then periodically
+    _startPeriodicChecks();
+  }
+
+  void _startPeriodicChecks() {
+    // Initial check after a short delay (let app initialize)
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) checkForUpdate(silent: true);
+    });
+
+    // Periodic checks every 30 minutes
+    _periodicCheckTimer = Timer.periodic(_updateCheckInterval, (_) {
+      if (mounted) checkForUpdate(silent: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _periodicCheckTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> checkForUpdate({bool silent = false}) async {
+    // Don't show "checking" status for silent background checks
+    if (!silent) {
+      state = state.copyWith(status: UpdateStatus.checking);
+    }
 
     try {
       // Get actual installed version
@@ -96,13 +127,14 @@ class UpdateNotifier extends StateNotifier<UpdateState> {
 
       final response = await http.get(
         Uri.parse('${AppConfig.updateUrl}/version'),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final updateInfo = UpdateInfo.fromJson(jsonDecode(response.body));
 
         // Compare versions using actual installed version
         if (_isNewerVersion(updateInfo.version, currentVersion)) {
+          debugPrint('[UpdateService] Update available: ${updateInfo.version} (current: $currentVersion)');
           state = state.copyWith(
             status: UpdateStatus.available,
             updateInfo: updateInfo,
@@ -120,16 +152,24 @@ class UpdateNotifier extends StateNotifier<UpdateState> {
           lastChecked: DateTime.now(),
         );
       } else {
-        state = state.copyWith(
-          status: UpdateStatus.error,
-          errorMessage: 'Server returned ${response.statusCode}',
-        );
+        // Only show error for manual checks
+        if (!silent) {
+          state = state.copyWith(
+            status: UpdateStatus.error,
+            errorMessage: 'Server returned ${response.statusCode}',
+          );
+        }
       }
     } catch (e) {
-      state = state.copyWith(
-        status: UpdateStatus.error,
-        errorMessage: e.toString(),
-      );
+      // Only show error for manual checks, silently ignore for background checks
+      if (!silent) {
+        state = state.copyWith(
+          status: UpdateStatus.error,
+          errorMessage: e.toString(),
+        );
+      } else {
+        debugPrint('[UpdateService] Silent check failed: $e');
+      }
     }
   }
 
