@@ -619,6 +619,18 @@ When the user asks you to do something:
 3. For tasks (fix bugs, add features), you'll work in that project's directory
 4. For status checks, report what you find
 
+**IMPORTANT - Code Fix Workflow:**
+When asked to fix code, follow this EXACT sequence:
+1. FIRST: Run "git pull origin main" (or master) to get latest code
+2. Check git status to see current state
+3. Investigate the error/issue
+4. Make the fix
+5. Commit the changes with a clear message
+6. Push to origin: "git push"
+7. Report the version you just deployed (from package.json)
+
+Always end fix tasks by telling the user what version was deployed.
+
 Respond concisely. You're being read on a phone screen.`;
 
   return prompt;

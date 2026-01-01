@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import '../../models/deployment.dart';
 import '../threads/threads_provider.dart';
-import '../threads/threads_screen.dart';
+import '../threads/chat_screen.dart';
 
 class DeploymentDetailScreen extends ConsumerStatefulWidget {
   final Deployment deployment;
@@ -19,9 +19,31 @@ class DeploymentDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen> {
+  bool _waitingForThread = false;
+  int _previousThreadCount = 0;
+
   @override
   Widget build(BuildContext context) {
     final d = widget.deployment;
+    final threadsState = ref.watch(threadsProvider);
+
+    // Navigate to new thread when it's created
+    if (_waitingForThread && threadsState.threads.length > _previousThreadCount) {
+      _waitingForThread = false;
+      final newThread = threadsState.threads.first;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              thread: newThread,
+              initialMessage: _buildContextMessage(),
+            ),
+          ),
+        );
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -162,18 +184,13 @@ class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen>
   }
 
   void _handleSendToClaude() {
-    // Create thread and navigate to chat
+    // Remember thread count before creating
+    _previousThreadCount = ref.read(threadsProvider).threads.length;
+    _waitingForThread = true;
+
+    // Create thread - navigation happens in build() when thread appears
     ref.read(threadsProvider.notifier).createThread(
       projectHint: widget.deployment.projectName.toLowerCase(),
-    );
-
-    // Navigate to threads screen where new thread will appear
-    Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ThreadsScreen(),
-      ),
     );
   }
 

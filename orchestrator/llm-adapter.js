@@ -10,7 +10,7 @@
  * 2. Implement the provider's API call
  */
 
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const https = require('https');
 const dns = require('dns');
 const fs = require('fs');
@@ -91,20 +91,72 @@ async function queryClaudeCode(prompt, { timeout, workingDir }) {
 
 /**
  * Query using Claude Code CLI with streaming output
- * Uses same approach as queryClaudeCode - just returns the result via callbacks
+ * Uses spawn to get real-time output
  */
 async function queryClaudeCodeStreaming(prompt, options = {}) {
   const {
-    timeout = 120000,
+    timeout = 300000,
     workingDir = '/root',
     onChunk = () => {},
     onStep = () => {},
   } = options;
 
-  // Use the same non-streaming function and return result via callback
-  const result = await queryClaudeCode(prompt, { timeout, workingDir });
-  onChunk(result);
-  return result;
+  return new Promise((resolve, reject) => {
+    const oauthToken = getClaudeOAuthToken();
+    if (!oauthToken) {
+      reject(new Error('No Claude OAuth token found. Run: claude setup-token'));
+      return;
+    }
+
+    let fullOutput = '';
+    let timeoutHandle;
+
+    // Spawn claude process
+    const proc = spawn('claude', ['--dangerously-skip-permissions', '-p', prompt], {
+      cwd: workingDir,
+      env: {
+        ...process.env,
+        IS_SANDBOX: '1',
+        CLAUDE_CODE_OAUTH_TOKEN: oauthToken.trim(),
+      },
+    });
+
+    // Set timeout
+    timeoutHandle = setTimeout(() => {
+      proc.kill('SIGTERM');
+      reject(new Error('Claude Code timeout'));
+    }, timeout);
+
+    // Stream stdout
+    proc.stdout.on('data', (data) => {
+      const text = data.toString();
+      fullOutput += text;
+      onChunk(text);
+    });
+
+    // Stream stderr (for progress/steps)
+    proc.stderr.on('data', (data) => {
+      const text = data.toString();
+      // Parse step info if present
+      if (text.includes('⠋') || text.includes('⠙') || text.includes('Running')) {
+        onStep(text.trim());
+      }
+    });
+
+    proc.on('close', (code) => {
+      clearTimeout(timeoutHandle);
+      if (code === 0) {
+        resolve(fullOutput.trim());
+      } else {
+        reject(new Error(`Claude Code exited with code ${code}`));
+      }
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(timeoutHandle);
+      reject(new Error(`Claude Code error: ${err.message}`));
+    });
+  });
 }
 
 /**
