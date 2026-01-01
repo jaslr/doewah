@@ -32,11 +32,13 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
   final terminal = Terminal(maxLines: 10000);
   final _inputController = TextEditingController();
   final _inputFocusNode = FocusNode();
+  final _terminalFocusNode = FocusNode();
   SSHClient? _client;
   SSHSession? _session;
   bool _isConnecting = true;
   String? _error;
-  bool _useVoiceInput = false;
+  bool _showInputBar = false;
+  bool _ctrlPressed = false;
 
   @override
   void initState() {
@@ -156,9 +158,26 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
   void dispose() {
     _inputController.dispose();
     _inputFocusNode.dispose();
+    _terminalFocusNode.dispose();
     _session?.close();
     _client?.close();
     super.dispose();
+  }
+
+  // Send ANSI escape sequences for special keys
+  void _sendSpecialKey(String escapeSequence) {
+    if (_session != null) {
+      _session!.write(Uint8List.fromList(utf8.encode(escapeSequence)));
+    }
+  }
+
+  void _sendCtrlKey(String key) {
+    if (_session != null) {
+      // Ctrl+key sends the character code minus 64 (or 96 for lowercase)
+      final code = key.toUpperCase().codeUnitAt(0) - 64;
+      _session!.write(Uint8List.fromList([code]));
+    }
+    setState(() => _ctrlPressed = false);
   }
 
   void _sendInput(String text) {
@@ -197,21 +216,21 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
         ),
         backgroundColor: Colors.black,
         actions: [
-          // Voice input toggle
+          // Toggle text input bar (for voice typing)
           IconButton(
             icon: Icon(
-              _useVoiceInput ? Icons.keyboard : Icons.mic,
-              color: _useVoiceInput ? const Color(0xFF6366F1) : null,
+              _showInputBar ? Icons.keyboard_hide : Icons.keyboard,
+              color: _showInputBar ? const Color(0xFF6366F1) : null,
             ),
             onPressed: () {
               setState(() {
-                _useVoiceInput = !_useVoiceInput;
+                _showInputBar = !_showInputBar;
               });
-              if (_useVoiceInput) {
+              if (_showInputBar) {
                 _inputFocusNode.requestFocus();
               }
             },
-            tooltip: _useVoiceInput ? 'Use keyboard input' : 'Use voice input',
+            tooltip: _showInputBar ? 'Hide input bar' : 'Show input bar (voice typing)',
           ),
           if (_error != null)
             IconButton(
@@ -226,73 +245,140 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
           children: [
             // Terminal view
             Expanded(
-              child: GestureDetector(
-                onTap: _useVoiceInput
-                    ? () => _inputFocusNode.requestFocus()
-                    : null,
-                child: TerminalView(
-                  terminal,
-                  readOnly: _useVoiceInput,
-                  textStyle: const TerminalStyle(
-                    fontSize: 14,
-                    fontFamily: 'monospace',
-                  ),
+              child: TerminalView(
+                terminal,
+                focusNode: _terminalFocusNode,
+                textStyle: const TerminalStyle(
+                  fontSize: 14,
+                  fontFamily: 'monospace',
                 ),
               ),
             ),
-            // Voice input field (when enabled)
-            if (_useVoiceInput)
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A2E),
-                  border: Border(
-                    top: BorderSide(color: Colors.grey[800]!),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _inputController,
-                        focusNode: _inputFocusNode,
-                        autofocus: true,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'monospace',
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Speak or type your message...',
-                          hintStyle: TextStyle(color: Colors.grey[600]),
-                          filled: true,
-                          fillColor: Colors.black,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
-                          ),
-                          prefixIcon: Icon(
-                            Icons.mic,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: _sendInput,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.send, color: Color(0xFF6366F1)),
-                      onPressed: () => _sendInput(_inputController.text),
-                    ),
-                  ],
-                ),
-              ),
+            // Terminal toolbar with special keys
+            _buildTerminalToolbar(),
+            // Optional text input bar (for voice typing support)
+            if (_showInputBar) _buildInputBar(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTerminalToolbar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        border: Border(
+          top: BorderSide(color: Colors.grey[800]!),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          // Escape key
+          _buildToolbarButton('ESC', () => _sendSpecialKey('\x1b')),
+          // Tab key
+          _buildToolbarButton('TAB', () => _sendSpecialKey('\t')),
+          // Ctrl modifier
+          _buildToolbarButton(
+            'CTRL',
+            () => setState(() => _ctrlPressed = !_ctrlPressed),
+            isActive: _ctrlPressed,
+          ),
+          // Divider
+          Container(width: 1, height: 24, color: Colors.grey[700]),
+          // Arrow keys
+          _buildToolbarButton('↑', () => _sendSpecialKey('\x1b[A')),
+          _buildToolbarButton('↓', () => _sendSpecialKey('\x1b[B')),
+          _buildToolbarButton('←', () => _sendSpecialKey('\x1b[D')),
+          _buildToolbarButton('→', () => _sendSpecialKey('\x1b[C')),
+          // Divider
+          Container(width: 1, height: 24, color: Colors.grey[700]),
+          // Common ctrl shortcuts
+          _buildToolbarButton('C', () => _sendCtrlKey('c'), isCtrl: true),
+          _buildToolbarButton('D', () => _sendCtrlKey('d'), isCtrl: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolbarButton(String label, VoidCallback onPressed, {bool isActive = false, bool isCtrl = false}) {
+    final showAsCtrl = isCtrl && !_ctrlPressed;
+    final displayLabel = showAsCtrl ? '^$label' : label;
+
+    return Material(
+      color: isActive ? const Color(0xFF6366F1) : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: () {
+          onPressed();
+          // Refocus terminal after toolbar tap
+          _terminalFocusNode.requestFocus();
+        },
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Text(
+            displayLabel,
+            style: TextStyle(
+              color: isActive ? Colors.white : Colors.grey[400],
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputBar() {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        border: Border(
+          top: BorderSide(color: Colors.grey[800]!),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _inputController,
+              focusNode: _inputFocusNode,
+              autofocus: true,
+              enableSuggestions: true,
+              autocorrect: false,
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'monospace',
+              ),
+              decoration: InputDecoration(
+                hintText: 'Type or use voice input...',
+                hintStyle: TextStyle(color: Colors.grey[600]),
+                filled: true,
+                fillColor: Colors.black,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              textInputAction: TextInputAction.send,
+              onSubmitted: _sendInput,
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: const Icon(Icons.send, color: Color(0xFF6366F1)),
+            onPressed: () => _sendInput(_inputController.text),
+          ),
+        ],
       ),
     );
   }
