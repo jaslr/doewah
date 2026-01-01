@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import '../../models/deployment.dart';
 import '../threads/threads_provider.dart';
-import '../threads/chat_screen.dart';
+import '../threads/threads_screen.dart';
 
 class DeploymentDetailScreen extends ConsumerStatefulWidget {
   final Deployment deployment;
@@ -19,29 +19,9 @@ class DeploymentDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen> {
-  bool _isCreatingThread = false;
-
   @override
   Widget build(BuildContext context) {
     final d = widget.deployment;
-
-    // Listen for thread creation
-    ref.listen<ThreadsState>(threadsProvider, (previous, next) {
-      if (_isCreatingThread && next.threads.isNotEmpty) {
-        final newThread = next.threads.first;
-        setState(() => _isCreatingThread = false);
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              thread: newThread,
-              initialMessage: _buildContextMessage(),
-            ),
-          ),
-        );
-      }
-    });
 
     return Scaffold(
       appBar: AppBar(
@@ -159,19 +139,13 @@ class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen>
 
             const SizedBox(height: 32),
 
-            // Send to Claw button
+            // Send to Claude button
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _isCreatingThread ? null : _handleSendToClaw,
-                icon: _isCreatingThread
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.smart_toy),
-                label: Text(_isCreatingThread ? 'Creating thread...' : 'Send to Claw'),
+                onPressed: _handleSendToClaude,
+                icon: const Icon(Icons.smart_toy),
+                label: const Text('Send to Claude'),
                 style: FilledButton.styleFrom(
                   backgroundColor: d.isFailure ? Colors.red : const Color(0xFF6366F1),
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -187,11 +161,19 @@ class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen>
     );
   }
 
-  void _handleSendToClaw() {
-    setState(() => _isCreatingThread = true);
-
+  void _handleSendToClaude() {
+    // Create thread and navigate to chat
     ref.read(threadsProvider.notifier).createThread(
       projectHint: widget.deployment.projectName.toLowerCase(),
+    );
+
+    // Navigate to threads screen where new thread will appear
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ThreadsScreen(),
+      ),
     );
   }
 
