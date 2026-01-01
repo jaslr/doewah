@@ -51,7 +51,9 @@ class OrchonService {
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
+      final decoded = jsonDecode(response.body);
+      // API returns {"deployments": [...]} not a raw array
+      final List<dynamic> data = decoded is List ? decoded : (decoded['deployments'] ?? []);
       return data.map((json) => Deployment.fromJson(json)).toList();
     } else {
       throw OrchonException(

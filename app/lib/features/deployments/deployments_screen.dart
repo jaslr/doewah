@@ -63,26 +63,13 @@ class _DeploymentsScreenState extends ConsumerState<DeploymentsScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            // DOA Logo
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.monitor_heart,
-                size: 20,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'DOA',
+            Text(
+              'DOEWAH',
               style: TextStyle(
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 3,
+                color: Colors.grey[400],
               ),
             ),
             const SizedBox(width: 8),
