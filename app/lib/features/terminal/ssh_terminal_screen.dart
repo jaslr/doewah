@@ -93,18 +93,18 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
         ),
       );
 
-      // Handle terminal output
+      // Handle terminal output - decode as UTF-8 for proper Unicode support
       _session!.stdout.listen((data) {
-        terminal.write(String.fromCharCodes(data));
+        terminal.write(utf8.decode(data, allowMalformed: true));
       });
 
       _session!.stderr.listen((data) {
-        terminal.write(String.fromCharCodes(data));
+        terminal.write(utf8.decode(data, allowMalformed: true));
       });
 
-      // Handle terminal input
+      // Handle terminal input - encode as UTF-8 for proper Unicode support
       terminal.onOutput = (data) {
-        _session?.write(Uint8List.fromList(data.codeUnits));
+        _session?.write(Uint8List.fromList(utf8.encode(data)));
       };
 
       // Handle session close
@@ -123,24 +123,24 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
       await Future.delayed(const Duration(milliseconds: 800));
 
       if (widget.initialCommand != null) {
-        _session?.write(Uint8List.fromList('${widget.initialCommand}\n'.codeUnits));
+        _session?.write(Uint8List.fromList(utf8.encode('${widget.initialCommand}\n')));
       } else if (widget.launchMode == LaunchMode.claude) {
         // Change to project directory if specified
         if (widget.projectDirectory != null) {
           terminal.write('[Changing to ${widget.projectDirectory}...]\r\n');
-          _session?.write(Uint8List.fromList('cd ${widget.projectDirectory}\n'.codeUnits));
+          _session?.write(Uint8List.fromList(utf8.encode('cd ${widget.projectDirectory}\n')));
           await Future.delayed(const Duration(milliseconds: 300));
         }
 
         terminal.write('[Launching Claude...]\r\n');
-        _session?.write(Uint8List.fromList('${config.claudeCommand}\n'.codeUnits));
+        _session?.write(Uint8List.fromList(utf8.encode('${config.claudeCommand}\n')));
 
         // If context message provided, wait for Claude to start then type it
         if (widget.contextMessage != null) {
           await Future.delayed(const Duration(milliseconds: 3000));
           terminal.write('[Pre-filling context - press Enter to send]\r\n');
           // Send message without newline so user can review and press Enter
-          _session?.write(Uint8List.fromList(widget.contextMessage!.codeUnits));
+          _session?.write(Uint8List.fromList(utf8.encode(widget.contextMessage!)));
         }
       }
     } catch (e) {
@@ -163,7 +163,7 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
 
   void _sendInput(String text) {
     if (_session != null && text.isNotEmpty) {
-      _session!.write(Uint8List.fromList('$text\n'.codeUnits));
+      _session!.write(Uint8List.fromList(utf8.encode('$text\n')));
       _inputController.clear();
     }
   }
