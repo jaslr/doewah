@@ -78,6 +78,10 @@ class OrchonService {
       } on http.ClientException catch (e) {
         lastException = OrchonException('Connection failed: ${e.message}');
         debugPrint('ORCHON attempt ${attempt + 1} connection error: $e');
+      } catch (e) {
+        // Catch any other exception
+        lastException = OrchonException('Unexpected error: $e');
+        debugPrint('ORCHON attempt ${attempt + 1} unexpected error: $e');
       }
 
       // Exponential backoff before next retry
