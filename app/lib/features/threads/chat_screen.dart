@@ -82,18 +82,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(widget.thread.projectHint ?? 'General'),
-            if (chatState.currentStep != null)
-              Text(
-                chatState.currentStep!,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[400],
-                ),
+            Text(
+              'DOEWAH',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 3,
+                color: Colors.grey[400],
               ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.thread.projectHint ?? 'General',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  if (chatState.currentStep != null)
+                    Text(
+                      chatState.currentStep!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[400],
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
@@ -110,10 +130,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: Column(
         children: [
           Expanded(
+            flex: 9,
             child: _buildMessageList(chatState),
           ),
           if (chatState.pendingConfirmation != null)
             _buildConfirmationBar(chatState),
+          _buildQuickActionsBar(),
           _buildInputBar(chatState),
         ],
       ),
@@ -199,6 +221,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildQuickActionsBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        border: Border(
+          top: BorderSide(color: Colors.grey[800]!, width: 1),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _QuickActionChip(
+              label: 'Fix this',
+              onTap: () => _insertText('Please fix this issue.'),
+            ),
+            const SizedBox(width: 8),
+            _QuickActionChip(
+              label: 'Explain',
+              onTap: () => _insertText('Can you explain what this does?'),
+            ),
+            const SizedBox(width: 8),
+            _QuickActionChip(
+              label: 'Run tests',
+              onTap: () => _insertText('Please run the tests and fix any failures.'),
+            ),
+            const SizedBox(width: 8),
+            _QuickActionChip(
+              label: 'Deploy',
+              onTap: () => _insertText('Deploy to production.'),
+            ),
+            const SizedBox(width: 8),
+            _QuickActionChip(
+              label: 'Git status',
+              onTap: () => _insertText('Show me the git status and any uncommitted changes.'),
+            ),
+            const SizedBox(width: 8),
+            _QuickActionChip(
+              label: 'Commit',
+              onTap: () => _insertText('Commit all changes with an appropriate message.'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _insertText(String text) {
+    _controller.text = text;
+    _focusNode.requestFocus();
   }
 
   Widget _buildInputBar(ChatState chatState) {
@@ -351,6 +426,39 @@ class _MessageBubble extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _QuickActionChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickActionChip({
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.grey[800],
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.grey[700]!),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[300],
+          ),
+        ),
       ),
     );
   }

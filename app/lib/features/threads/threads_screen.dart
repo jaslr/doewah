@@ -57,7 +57,15 @@ class _ThreadsScreenState extends ConsumerState<ThreadsScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('Doewah'),
+            Text(
+              'DOEWAH',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 3,
+                color: Colors.grey[400],
+              ),
+            ),
             const SizedBox(width: 8),
             _buildConnectionIndicator(connectionState),
           ],
