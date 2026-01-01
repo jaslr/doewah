@@ -1,5 +1,81 @@
 # DOEWAH - Claude Code Instructions
 
+## Project Overview
+
+**DOEWAH** (Digital Ocean Workstation for Executing Automated Helpers) is a mobile-first DevOps control plane with three interfaces:
+- **Telegram Bot** - Command-based chat for quick actions
+- **Flutter App** - Native mobile app with deployment dashboard + Claude threads
+- **WebSocket Server** - Real-time communication backbone
+
+---
+
+## Integration: DOA ↔ ORCHON
+
+### MOU (Memorandum of Understanding)
+
+| Project | Role | Consumes | Provides |
+|---------|------|----------|----------|
+| **ORCHON** | Infrastructure Observatory | GitHub webhooks, provider APIs | Deployment status API |
+| **DOA** | DevOps Control Plane | ORCHON deployment data | Fix actions via Claude threads |
+
+**Data Flow:**
+```
+GitHub/Cloudflare/Fly.io → ORCHON (monitors) → DOA (displays + acts)
+                                                    ↓
+                                              Claude Code (fixes)
+```
+
+### Handshake Configuration
+
+| DOA Side | ORCHON Side | Notes |
+|----------|-------------|-------|
+| `ORCHON_API_SECRET` (dart-define at build) | `API_SECRET` (Fly.io secret) | **Must match** |
+| `ORCHON_URL` (defaults to prod) | Backend URL | `https://observatory-backend.fly.dev` |
+
+**To update the shared secret:**
+1. Generate new secret: `openssl rand -hex 32`
+2. DOA: Rebuild app with `--dart-define=ORCHON_API_SECRET=<new>`
+3. ORCHON: `fly secrets set API_SECRET=<new> -a observatory-backend`
+
+### API Endpoints Consumed
+
+| Endpoint | Purpose | Used By |
+|----------|---------|---------|
+| `GET /api/deployments/recent?limit=100` | Recent deployments | Flutter home screen |
+| `GET /api/deployments/failures?limit=5` | Failed deployments | Failure alerts |
+
+### Files to Update When Changing Integration
+
+**DOA:**
+- `app/lib/core/config.dart` - ORCHON URL + secret config
+- `app/lib/core/orchon/orchon_service.dart` - API client + endpoints
+- `app/lib/models/deployment.dart` - Data model (must match ORCHON schema)
+
+**ORCHON:**
+- `observatory-backend/.env.example` - Document API_SECRET
+- `observatory-backend/src/config/env.ts` - Secret validation
+- `observatory-backend/src/routes/api.ts` - Deployment endpoints
+
+---
+
+## Infrastructure Choices
+
+| Component | Platform | Why |
+|-----------|----------|-----|
+| Bot + WebSocket | DigitalOcean Droplet (209.38.85.244) | Persistent SSH, systemd services, tmux sessions for Claude Code |
+| Flutter OTA | Self-hosted on droplet (port 8406) | Bypass Play Store, instant updates |
+| ORCHON Backend | Fly.io | Free tier, Postgres included, auto-sleep |
+| ORCHON Frontend | Cloudflare Pages | Free, global CDN, direct wrangler deploys |
+
+**Ports on Droplet:**
+| Port | Service |
+|------|---------|
+| 8405 | WebSocket server (doewah-ws) |
+| 8406 | OTA update server (doewah-updates) |
+| 22 | SSH |
+
+---
+
 ## Deployment
 
 ### Backend (Bot + WebSocket)
@@ -29,26 +105,20 @@ Existing installed apps will prompt to update on next launch.
 http://209.38.85.244:8406/download
 ```
 
-### ORCHON Integration
-The Flutter app fetches deployments from ORCHON at `https://observatory-backend.fly.dev`.
-
-| DOA Config | ORCHON Config | Purpose |
-|------------|---------------|---------|
-| `ORCHON_API_SECRET` (dart-define) | `API_SECRET` (env) | Bearer token auth |
-
-Both must have the same value. Set in Fly.io secrets for ORCHON backend.
+---
 
 ## Architecture
 
 - `bot/` - Telegram bot interface
 - `orchestrator/` - Brain that interprets messages and routes actions
+- `app/` - Flutter mobile app
+- `ws/` - WebSocket + OTA update servers
 - `contexts/` - Project context files (one per project)
 
-## Integrations
+## Other Integrations
 
 | Service | Config | Purpose |
 |---------|--------|---------|
-| ORCHON | `OBSERVATORY_API_SECRET` | Deployment status queries |
 | Sentry | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_BASE_URL` | Error tracking queries |
 
 ## Adding New Integrations
