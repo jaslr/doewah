@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -38,17 +40,63 @@ class DeploymentsState {
 class OrchonService {
   final http.Client _client;
 
+  /// Retry configuration
+  static const int _maxRetries = 3;
+  static const Duration _requestTimeout = Duration(seconds: 15);
+  static const Duration _initialBackoff = Duration(milliseconds: 500);
+
   OrchonService({http.Client? client}) : _client = client ?? http.Client();
+
+  /// Execute HTTP GET with retry and exponential backoff
+  Future<http.Response> _getWithRetry(Uri uri) async {
+    Exception? lastException;
+
+    for (int attempt = 0; attempt < _maxRetries; attempt++) {
+      try {
+        final response = await _client
+            .get(uri, headers: _authHeaders)
+            .timeout(_requestTimeout);
+
+        // Success or client error (4xx) - don't retry
+        if (response.statusCode < 500) {
+          return response;
+        }
+
+        // Server error (5xx) - retry
+        lastException = OrchonException(
+          'Server error: ${response.statusCode}',
+          statusCode: response.statusCode,
+        );
+        debugPrint('ORCHON attempt ${attempt + 1} failed: ${response.statusCode}');
+
+      } on TimeoutException {
+        lastException = OrchonException('Request timeout after ${_requestTimeout.inSeconds}s');
+        debugPrint('ORCHON attempt ${attempt + 1} timed out');
+      } on SocketException catch (e) {
+        lastException = OrchonException('Network error: ${e.message}');
+        debugPrint('ORCHON attempt ${attempt + 1} network error: $e');
+      } on http.ClientException catch (e) {
+        lastException = OrchonException('Connection failed: ${e.message}');
+        debugPrint('ORCHON attempt ${attempt + 1} connection error: $e');
+      }
+
+      // Exponential backoff before next retry
+      if (attempt < _maxRetries - 1) {
+        final backoff = _initialBackoff * (1 << attempt); // 500ms, 1s, 2s
+        debugPrint('ORCHON retrying in ${backoff.inMilliseconds}ms...');
+        await Future.delayed(backoff);
+      }
+    }
+
+    throw lastException ?? OrchonException('Unknown error after $_maxRetries attempts');
+  }
 
   /// Fetch recent deployments across all projects
   Future<List<Deployment>> getRecentDeployments({int limit = 100}) async {
     final uri = Uri.parse('${AppConfig.orchonUrl}/api/deployments/recent')
         .replace(queryParameters: {'limit': limit.toString()});
 
-    final response = await _client.get(
-      uri,
-      headers: _authHeaders,
-    );
+    final response = await _getWithRetry(uri);
 
     if (response.statusCode == 200) {
       final decoded = jsonDecode(response.body);
@@ -68,10 +116,7 @@ class OrchonService {
     final uri = Uri.parse('${AppConfig.orchonUrl}/api/deployments/failures')
         .replace(queryParameters: {'limit': limit.toString()});
 
-    final response = await _client.get(
-      uri,
-      headers: _authHeaders,
-    );
+    final response = await _getWithRetry(uri);
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
@@ -88,10 +133,7 @@ class OrchonService {
   Future<Deployment?> getDeployment(String id) async {
     final uri = Uri.parse('${AppConfig.orchonUrl}/api/deployments/$id');
 
-    final response = await _client.get(
-      uri,
-      headers: _authHeaders,
-    );
+    final response = await _getWithRetry(uri);
 
     if (response.statusCode == 200) {
       return Deployment.fromJson(jsonDecode(response.body));
