@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import '../../models/deployment.dart';
-import '../threads/threads_provider.dart';
-import '../threads/chat_screen.dart';
+import '../settings/terminal_config_screen.dart';
+import '../terminal/ssh_terminal_screen.dart';
 
 class DeploymentDetailScreen extends ConsumerStatefulWidget {
   final Deployment deployment;
@@ -19,31 +19,9 @@ class DeploymentDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen> {
-  bool _isCreatingThread = false;
-
   @override
   Widget build(BuildContext context) {
     final d = widget.deployment;
-
-    // Listen for thread creation
-    ref.listen<ThreadsState>(threadsProvider, (previous, next) {
-      if (_isCreatingThread && next.threads.isNotEmpty) {
-        // Find the newest thread (just created)
-        final newThread = next.threads.first;
-        setState(() => _isCreatingThread = false);
-
-        // Navigate to chat and send the initial message
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              thread: newThread,
-              initialMessage: _buildFixMessage(),
-            ),
-          ),
-        );
-      }
-    });
 
     return Scaffold(
       appBar: AppBar(
@@ -141,52 +119,83 @@ class _DeploymentDetailScreenState extends ConsumerState<DeploymentDetailScreen>
 
             const SizedBox(height: 32),
 
-            // Fix This button (only for failures)
-            if (d.isFailure)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _isCreatingThread ? null : _handleFixThis,
-                  icon: _isCreatingThread
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.build),
-                  label: Text(_isCreatingThread ? 'Creating thread...' : 'Fix This'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+            // Launch Claude AI button
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _launchClaudeAI(context),
+                icon: const Icon(Icons.smart_toy),
+                label: Text(d.isFailure ? 'Fix with Claude AI' : 'Send to Claude AI'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: d.isFailure ? Colors.red : const Color(0xFF6366F1),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  void _handleFixThis() {
-    setState(() => _isCreatingThread = true);
+  void _launchClaudeAI(BuildContext context) {
+    final d = widget.deployment;
+    final config = ref.read(terminalConfigProvider);
 
-    // Create a new thread with the project hint
-    ref.read(threadsProvider.notifier).createThread(
-      projectHint: widget.deployment.projectName.toLowerCase(),
+    // Find matching project directory
+    String? projectDir;
+    final projectNameLower = d.projectName.toLowerCase();
+    for (final project in config.projects) {
+      if (project.name.toLowerCase() == projectNameLower ||
+          project.directory.toLowerCase().contains(projectNameLower)) {
+        projectDir = project.directory;
+        break;
+      }
+    }
+
+    // Build context message
+    final contextMessage = d.isFailure
+        ? _buildFailureContext()
+        : _buildSuccessContext();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SshTerminalScreen(
+          launchMode: LaunchMode.claude,
+          projectDirectory: projectDir,
+          contextMessage: contextMessage,
+        ),
+      ),
     );
   }
 
-  String _buildFixMessage() {
+  String _buildFailureContext() {
     final d = widget.deployment;
     return '''Fix deployment failure for ${d.projectDisplayName}.
 
+Project: ${d.projectDisplayName}
 Provider: ${_formatProvider(d.provider)}
 Branch: ${d.branch ?? 'main'}
 Commit: ${d.commitSha ?? 'unknown'}
 ${d.runUrl != null ? 'Run URL: ${d.runUrl}' : ''}
 Failed at: ${d.completedAt != null ? _formatDateTime(d.completedAt!) : 'unknown'}
 
-Please investigate and fix this deployment issue.''';
+Please investigate the deployment logs and fix this issue.''';
+  }
+
+  String _buildSuccessContext() {
+    final d = widget.deployment;
+    return '''Deployment succeeded for ${d.projectDisplayName}.
+
+Project: ${d.projectDisplayName}
+Provider: ${_formatProvider(d.provider)}
+Branch: ${d.branch ?? 'main'}
+Commit: ${d.commitSha ?? 'unknown'}
+${d.runUrl != null ? 'Run URL: ${d.runUrl}' : ''}
+Completed at: ${d.completedAt != null ? _formatDateTime(d.completedAt!) : 'unknown'}
+
+What would you like to do with this deployment?''';
   }
 
   String _formatProvider(String provider) {
@@ -200,7 +209,24 @@ Please investigate and fix this deployment issue.''';
   }
 
   String _formatDateTime(DateTime dt) {
-    return '${dt.month}/${dt.day}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    // Convert to Sydney time (AEDT = UTC+11, AEST = UTC+10)
+    // Daylight saving: first Sunday in October to first Sunday in April
+    final utc = dt.toUtc();
+    final month = utc.month;
+    final isDst = month >= 10 || month <= 3; // Simplified DST check
+    final sydneyOffset = isDst ? 11 : 10;
+    final sydney = utc.add(Duration(hours: sydneyOffset));
+
+    // Format: "10 Jan 2026 14:30"
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final day = sydney.day;
+    final monthName = months[sydney.month - 1];
+    final year = sydney.year;
+    final hour = sydney.hour.toString().padLeft(2, '0');
+    final minute = sydney.minute.toString().padLeft(2, '0');
+
+    return '$day $monthName $year $hour:$minute';
   }
 
   String _formatDuration(Duration duration) {
@@ -215,8 +241,8 @@ Please investigate and fix this deployment issue.''';
 
   Future<void> _openExternalUrl(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (await url_launcher.canLaunchUrl(uri)) {
+      await url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
     }
   }
 

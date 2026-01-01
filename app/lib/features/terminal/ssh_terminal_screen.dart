@@ -13,11 +13,15 @@ enum LaunchMode { bash, claude }
 class SshTerminalScreen extends ConsumerStatefulWidget {
   final String? initialCommand;
   final LaunchMode launchMode;
+  final String? projectDirectory;
+  final String? contextMessage;
 
   const SshTerminalScreen({
     super.key,
     this.initialCommand,
     this.launchMode = LaunchMode.bash,
+    this.projectDirectory,
+    this.contextMessage,
   });
 
   @override
@@ -121,8 +125,23 @@ class _SshTerminalScreenState extends ConsumerState<SshTerminalScreen> {
       if (widget.initialCommand != null) {
         _session?.write(Uint8List.fromList('${widget.initialCommand}\n'.codeUnits));
       } else if (widget.launchMode == LaunchMode.claude) {
+        // Change to project directory if specified
+        if (widget.projectDirectory != null) {
+          terminal.write('[Changing to ${widget.projectDirectory}...]\r\n');
+          _session?.write(Uint8List.fromList('cd ${widget.projectDirectory}\n'.codeUnits));
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+
         terminal.write('[Launching Claude...]\r\n');
         _session?.write(Uint8List.fromList('${config.claudeCommand}\n'.codeUnits));
+
+        // If context message provided, wait for Claude to start then type it
+        if (widget.contextMessage != null) {
+          await Future.delayed(const Duration(milliseconds: 3000));
+          terminal.write('[Pre-filling context - press Enter to send]\r\n');
+          // Send message without newline so user can review and press Enter
+          _session?.write(Uint8List.fromList(widget.contextMessage!.codeUnits));
+        }
       }
     } catch (e) {
       terminal.write('\r\n[Error: $e]\r\n');
