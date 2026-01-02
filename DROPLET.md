@@ -7,11 +7,11 @@
 ## Quick Reference
 
 ```bash
-# SSH into the droplet
-ssh -i ~/.ssh/id_jaslr root@209.38.85.244
+# SSH into the droplet (using ~/.ssh/config alias)
+ssh droplet
 
-# Or if you have .env sourced:
-source .env && ssh -i $DROPLET_SSH_KEY root@$DROPLET_IP
+# Or the full command:
+ssh -i ~/.ssh/id_jaslr root@209.38.85.244
 ```
 
 ## What Lives on This Droplet
@@ -150,6 +150,39 @@ systemctl list-units --type=service --state=running | grep doewah
 ```
 
 ## Troubleshooting
+
+### SSH "Broken Pipe" Disconnects
+
+Idle SSH connections get dropped. Fix by adding keep-alive to `~/.ssh/config`:
+
+```bash
+# In ~/.ssh/config
+Host droplet
+  HostName 209.38.85.244
+  User root
+  IdentityFile ~/.ssh/id_jaslr
+  ServerAliveInterval 60
+  ServerAliveCountMax 3
+
+# Global fallback for all hosts
+Host *
+  ServerAliveInterval 60
+  ServerAliveCountMax 3
+```
+
+Now just use `ssh droplet` instead of the full command.
+
+### Random Characters on Mouse Click (Terminal Garbage)
+
+This happens when tmux/vim/htop enable mouse reporting mode and don't clean it up on exit.
+
+**Quick fix:** Run `reset` in terminal.
+
+**Permanent fix:** Add to `~/.bashrc`:
+```bash
+# Reset mouse reporting mode on shell start
+printf '\e[?1000l\e[?1002l\e[?1003l\e[?1006l' 2>/dev/null
+```
 
 ### Can't Connect via SSH
 
